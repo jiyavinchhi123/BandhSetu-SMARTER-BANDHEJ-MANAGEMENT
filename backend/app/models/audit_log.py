@@ -16,3 +16,4 @@ class AuditLog(Base):
     details = Column(String(1000), nullable=True)
     timestamp_ist = Column(String(100), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+

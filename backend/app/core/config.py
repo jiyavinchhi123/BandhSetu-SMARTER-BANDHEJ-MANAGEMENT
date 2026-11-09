@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     # Database
     DATABASE_URL: str = "sqlite:///./bandhej_dev.db"
 
+    # JWT Authentication & Security
+    JWT_SECRET_KEY: str = "bandhej-super-secret-key-change-in-production-min32chars"
+    JWT_ALGORITHM: str = "HS256"
+    ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 14  # 14 hours
+
     # Supabase Configuration
     SUPABASE_URL: str = "https://placeholder-supabase-id.supabase.co"
     SUPABASE_KEY: str = "placeholder-supabase-anon-key"
@@ -37,6 +42,10 @@ class Settings(BaseSettings):
     # Regional & Business Settings
     DEFAULT_CURRENCY: str = "INR"
     TIMEZONE: str = "Asia/Kolkata"
+
+    # Default Manager Access Timings in IST (24-hour HH:MM format)
+    DEFAULT_MANAGER_START_TIME: str = "09:00"  # 09:00 AM IST
+    DEFAULT_MANAGER_END_TIME: str = "20:00"    # 08:00 PM IST
 
     model_config = SettingsConfigDict(
         env_file=".env",
@@ -51,4 +60,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

@@ -37,3 +37,4 @@ class User(Base):
 
     def is_manager(self) -> bool:
         return self.role == "manager"
+

@@ -278,3 +278,4 @@ def get_manager_audit_logs(
     """Admin inspects login, logout, and activity logs specifically for a Manager."""
     logs = db.query(AuditLog).filter(AuditLog.user_id == manager_id).order_by(AuditLog.id.desc()).limit(limit).all()
     return logs
+

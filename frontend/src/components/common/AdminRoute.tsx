@@ -24,3 +24,4 @@ export const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }
 
   return <>{children}</>;
 };
+

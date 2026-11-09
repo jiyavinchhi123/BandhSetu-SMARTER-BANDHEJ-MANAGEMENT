@@ -1,12 +1,16 @@
-# Bandhej Worker and Business Management Web Application
+# BandhSetu — Smarter Bandhej Worker & Business Management
 
 Production-ready enterprise management web application designed for Indian Bandhej (Bandhani) textile manufacturing businesses managing 200–500 artisan women workers.
 
 ## Tech Stack
 - **Frontend**: React (Vite) + TypeScript + Tailwind CSS + React Router + Lucide Icons
 - **Backend**: Python FastAPI + Pydantic v2 + SQLAlchemy ORM + Alembic
-- **Database & Auth**: Supabase PostgreSQL & Supabase Auth
+- **Database & Auth**: Supabase PostgreSQL & Supabase Auth (with Role-Based Access Control)
 - **Deployment**: Vercel (Frontend) + Render (Backend)
+
+## Authentication & Access Control (Step 2)
+- **Admin / Owner**: Full 24/7 unrestricted access, manager oversight, manual lock/unlock, timing scheduling.
+- **Manager / Authorized Operator**: Operating access between **09:00 AM – 08:00 PM IST**. Automatic session expiration and instant manual lock overrides.
 
 ## Quick Start
 
@@ -18,8 +22,8 @@ python -m venv venv
 pip install -r requirements.txt
 uvicorn app.main:app --reload --port 8000
 ```
-API Documentation: [http://localhost:8000/docs](http://localhost:8000/docs)  
-Health Check: [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
+- API Documentation: [http://localhost:8000/docs](http://localhost:8000/docs)
+- Health Check: [http://localhost:8000/api/v1/health](http://localhost:8000/api/v1/health)
 
 ### 2. Frontend
 ```bash
@@ -27,7 +31,7 @@ cd frontend
 npm install
 npm run dev
 ```
-Application: [http://localhost:5173](http://localhost:5173)
+- Application: [http://localhost:5173](http://localhost:5173)
 
 ---
 

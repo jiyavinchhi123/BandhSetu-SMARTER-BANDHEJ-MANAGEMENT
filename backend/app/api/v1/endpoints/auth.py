@@ -200,3 +200,4 @@ def reset_password(
     )
 
     return {"message": "Password successfully updated."}
+

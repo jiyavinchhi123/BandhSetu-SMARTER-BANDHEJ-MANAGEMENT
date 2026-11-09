@@ -1,5 +1,5 @@
 from app.database.session import Base
+from app.models.user import User
+from app.models.audit_log import AuditLog
 
-# Import all models here once defined for Alembic autogenerate
-__all__ = ["Base"]
-
+__all__ = ["Base", "User", "AuditLog"]

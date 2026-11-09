@@ -82,3 +82,4 @@ def require_manager_or_admin(
 ) -> User:
     """Allows either Manager (within valid hours) or Admin."""
     return current_user
+
