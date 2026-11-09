@@ -30,3 +30,4 @@ class Worker(Base):
     work_distributions = relationship("WorkDistribution", back_populates="worker", cascade="all, delete-orphan")
     material_ledger_entries = relationship("MaterialLedgerEntry", back_populates="worker", cascade="all, delete-orphan")
     payments = relationship("PaymentRecord", back_populates="worker", cascade="all, delete-orphan")
+

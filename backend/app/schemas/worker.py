@@ -127,3 +127,4 @@ class TimelineTransactionItem(BaseModel):
     quantity: Optional[int] = None
     date: date
     status_badge: str
+

@@ -24,3 +24,4 @@ class MaterialLedgerEntry(Base):
 
     # Relationships
     worker = relationship("Worker", back_populates="material_ledger_entries")
+

@@ -23,3 +23,4 @@ class PaymentRecord(Base):
 
     # Relationships
     worker = relationship("Worker", back_populates="payments")
+

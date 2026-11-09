@@ -41,3 +41,4 @@ class WorkDistribution(Base):
     # Relationships
     worker = relationship("Worker", back_populates="work_distributions")
     item = relationship("Item", back_populates="work_distributions")
+
