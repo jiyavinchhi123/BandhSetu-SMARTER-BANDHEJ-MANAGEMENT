@@ -6,6 +6,7 @@ import {
   Layers,
   IndianRupee,
   Package,
+  Tag,
   Settings,
   Sparkles,
   ShieldAlert,
@@ -24,6 +25,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   const baseNavItems = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
     { name: 'Artisan Workers', path: '/workers', icon: Users, badge: '384' },
+    { name: 'Item Catalogue', path: '/items', icon: Tag },
     { name: 'Work Batches', path: '/batches', icon: Layers, badge: '42' },
     { name: 'Wages & Payouts', path: '/payments', icon: IndianRupee },
     { name: 'Fabric Inventory', path: '/inventory', icon: Package },

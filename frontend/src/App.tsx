@@ -11,6 +11,8 @@ import { Login } from './pages/Login';
 import { AccessLocked } from './pages/AccessLocked';
 import { Dashboard } from './pages/Dashboard';
 import { Workers } from './pages/Workers';
+import { WorkerProfile } from './pages/WorkerProfile';
+import { Items } from './pages/Items';
 import { Batches } from './pages/Batches';
 import { Payments } from './pages/Payments';
 import { Inventory } from './pages/Inventory';
@@ -39,6 +41,8 @@ export const App: React.FC = () => {
             >
               <Route index element={<Dashboard />} />
               <Route path="workers" element={<Workers />} />
+              <Route path="workers/:id" element={<WorkerProfile />} />
+              <Route path="items" element={<Items />} />
               <Route path="batches" element={<Batches />} />
               <Route path="payments" element={<Payments />} />
               <Route path="inventory" element={<Inventory />} />
