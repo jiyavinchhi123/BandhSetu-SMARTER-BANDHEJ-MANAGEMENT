@@ -20,6 +20,7 @@ class WorkDistribution(Base):
     knot_style = Column(String(100), nullable=False)  # e.g., "Ekdali", "Shikari", "Jaal", "Bharti"
     quantity_issued = Column(Integer, nullable=False)
     quantity_returned = Column(Integer, default=0, nullable=False)
+    quantity_rejected = Column(Integer, default=0, nullable=False)
     quantity_pending = Column(Integer, nullable=False)
 
     total_gross_wage = Column(Numeric(12, 2), nullable=False)  # rate_per_piece * quantity_issued
@@ -41,4 +42,5 @@ class WorkDistribution(Base):
     # Relationships
     worker = relationship("Worker", back_populates="work_distributions")
     item = relationship("Item", back_populates="work_distributions")
+    returns = relationship("WorkReturn", back_populates="distribution", cascade="all, delete-orphan")
 

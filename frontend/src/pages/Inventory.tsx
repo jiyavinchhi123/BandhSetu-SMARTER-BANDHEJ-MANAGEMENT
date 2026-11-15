@@ -1,33 +1,29 @@
-import React from 'react';
-import { Package, Plus } from 'lucide-react';
-import { Button, Card, Badge } from '../components/ui';
+import React, { useState } from 'react';
+import { Package, Layers, Plus, Info } from 'lucide-react';
+import { MaterialDebitCreditLedger } from '../components/ledger/MaterialDebitCreditLedger';
 
 export const Inventory: React.FC = () => {
   return (
-    <div className="space-y-5">
+    <div className="space-y-6 pb-20 md:pb-6">
+      {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900">Raw Fabric & Thread Stock</h2>
-          <p className="text-xs sm:text-sm text-slate-500">
-            Silk, Gajji, Georgette fabrics, tying threads, and dye materials
+          <div className="flex items-center gap-2">
+            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+              Fabric Inventory & Material Ledger
+            </h1>
+            <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+              Live Balances
+            </span>
+          </div>
+          <p className="text-sm text-slate-500 mt-1">
+            Track cloth pieces with artisans, double-entry debit/credit transactions, and running balances.
           </p>
         </div>
-        <Button variant="primary" icon={<Plus className="w-4 h-4" />}>
-          Add Material Lot
-        </Button>
       </div>
 
-      <Card className="text-center py-12">
-        <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-3">
-          <Package className="w-6 h-6" />
-        </div>
-        <h3 className="text-base font-bold text-slate-800">Inventory Tracker Ready</h3>
-        <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto mt-1 mb-4">
-          Weight loss tracking, yarn distribution, and saree stock controls ready for Step 2.
-        </p>
-        <Badge variant="neutral">Initial Setup</Badge>
-      </Card>
+      {/* Embedded Material Debit-Credit Ledger with Worker Selector */}
+      <MaterialDebitCreditLedger showWorkerSelector={true} />
     </div>
   );
 };
-

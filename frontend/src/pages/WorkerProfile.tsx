@@ -31,6 +31,7 @@ import {
 } from '../services/api';
 import { Button, Card, Badge, Input, LoadingSpinner } from '../components/ui';
 import { ItemSearchSelect } from '../components/common/ItemSearchSelect';
+import { MaterialDebitCreditLedger } from '../components/ledger/MaterialDebitCreditLedger';
 import { formatINR, formatIndianDate } from '../utils/formatters';
 import { useToast } from '../hooks/useToast';
 
@@ -485,55 +486,11 @@ export const WorkerProfile: React.FC = () => {
         </Card>
       )}
 
-      {/* 2. MATERIAL LEDGER TAB */}
+      {/* 2. MATERIAL LEDGER TAB (Double-Entry Debit/Credit with Legend) */}
       {activeTab === 'material' && (
-        <Card className="space-y-4">
-          <div>
-            <h3 className="font-bold text-slate-900 text-base">Raw Fabric & Yarn Material Ledger</h3>
-            <p className="text-xs text-slate-500">Track fabric meters, saree pieces, and tying thread cones</p>
-          </div>
-
-          {materials.length === 0 ? (
-            <div className="text-center py-10 text-slate-400 text-xs">No material logged yet.</div>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-              <table className="w-full text-left border-collapse text-xs">
-                <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase">
-                    <th className="p-3">Lot Code</th>
-                    <th className="p-3">Material Type</th>
-                    <th className="p-3 text-center">Issued Qty</th>
-                    <th className="p-3 text-center">Returned Qty</th>
-                    <th className="p-3">Issue Date</th>
-                    <th className="p-3 text-center">Status</th>
-                    <th className="p-3">Notes</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {materials.map((m) => (
-                    <tr key={m.id} className="hover:bg-slate-50/70">
-                      <td className="p-3 font-mono font-bold text-slate-700">{m.lot_number || '—'}</td>
-                      <td className="p-3 font-semibold text-slate-800">{m.material_type}</td>
-                      <td className="p-3 text-center font-bold">
-                        {m.issued_qty} {m.unit}
-                      </td>
-                      <td className="p-3 text-center text-slate-600">
-                        {m.returned_qty} {m.unit}
-                      </td>
-                      <td className="p-3 text-slate-500">{formatIndianDate(m.issue_date)}</td>
-                      <td className="p-3 text-center">
-                        <Badge variant={m.status === 'Returned' ? 'success' : 'neutral'} size="sm">
-                          {m.status}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-slate-400 truncate max-w-xs">{m.notes || '—'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
+        <div className="space-y-6">
+          <MaterialDebitCreditLedger initialWorkerId={worker.id} showWorkerSelector={false} />
+        </div>
       )}
 
       {/* 3. WORK RETURNS TAB */}

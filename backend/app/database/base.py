@@ -4,7 +4,9 @@ from app.models.audit_log import AuditLog
 from app.models.worker import Worker
 from app.models.item import Item
 from app.models.work_distribution import WorkDistribution
+from app.models.work_return import WorkReturn
 from app.models.material_ledger import MaterialLedgerEntry
+from app.models.material_transaction import MaterialTransaction
 from app.models.payment_record import PaymentRecord
 
 __all__ = [
@@ -14,6 +16,8 @@ __all__ = [
     "Worker",
     "Item",
     "WorkDistribution",
+    "WorkReturn",
     "MaterialLedgerEntry",
+    "MaterialTransaction",
     "PaymentRecord",
 ]

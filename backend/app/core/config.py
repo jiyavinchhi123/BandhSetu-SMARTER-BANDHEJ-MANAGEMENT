@@ -1,6 +1,10 @@
+from pathlib import Path
 from typing import List, Union
 from pydantic import AnyHttpUrl, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
+DEFAULT_SQLITE_PATH = (BACKEND_DIR / "bandhej_dev.db").as_posix()
 
 
 class Settings(BaseSettings):
@@ -26,8 +30,8 @@ class Settings(BaseSettings):
             return v
         raise ValueError(v)
 
-    # Database
-    DATABASE_URL: str = "sqlite:///./bandhej_dev.db"
+    # Database: Default to backend/bandhej_dev.db with absolute posix path
+    DATABASE_URL: str = f"sqlite:///{DEFAULT_SQLITE_PATH}"
 
     # JWT Authentication & Security
     JWT_SECRET_KEY: str = "bandhej-super-secret-key-change-in-production-min32chars"

@@ -97,6 +97,7 @@ export interface WorkDistributionItem {
   knot_style: string;
   quantity_issued: number;
   quantity_returned: number;
+  quantity_rejected?: number;
   quantity_pending: number;
   total_gross_wage: number;
   deductions: number;
@@ -108,7 +109,78 @@ export interface WorkDistributionItem {
   status: string;
   qc_remarks?: string | null;
   remarks?: string | null;
+  worker_name?: string;
+  worker_serial?: string;
   created_at: string;
+}
+
+export interface WorkReturnItem {
+  id: number;
+  return_code: string;
+  distribution_id: number;
+  worker_id: number;
+  item_id?: number | null;
+  item_name_snapshot: string;
+  rate_per_piece_snapshot: number;
+  quantity_returned: number;
+  quantity_rejected: number;
+  rejection_reason?: string | null;
+  rejection_remarks?: string | null;
+  completed_work_value: number;
+  return_date: string;
+  recorded_by_name?: string | null;
+  remarks?: string | null;
+  worker_name?: string;
+  worker_serial?: string;
+  batch_code?: string;
+  created_at: string;
+}
+
+export interface MaterialTransactionItem {
+  id: number;
+  transaction_code: string;
+  worker_id: number;
+  distribution_id?: number | null;
+  return_id?: number | null;
+  item_name: string;
+  item_code?: string | null;
+  transaction_date: string;
+  transaction_type: string;
+  debit_qty: number;
+  credit_qty: number;
+  rejected_qty: number;
+  rate_per_piece: number;
+  total_value: number;
+  running_balance: number;
+  recorded_by_name?: string | null;
+  remarks?: string | null;
+  is_reversed: boolean;
+  reversal_reason?: string | null;
+  created_at: string;
+}
+
+export interface ItemWisePendingItem {
+  item_id?: number | null;
+  item_name: string;
+  item_code?: string | null;
+  total_given: number;
+  total_received: number;
+  total_rejected: number;
+  pending_quantity: number;
+  rate_per_piece: number;
+  estimated_pending_wage: number;
+}
+
+export interface MaterialLedgerSummary {
+  worker_id: number;
+  worker_name: string;
+  worker_serial: string;
+  total_given: number;
+  total_received: number;
+  total_rejected: number;
+  remaining_pending: number;
+  item_wise_pending: ItemWisePendingItem[];
+  transactions: MaterialTransactionItem[];
 }
 
 export interface MaterialLedgerItem {
@@ -526,6 +598,106 @@ export class ApiClient {
       headers: this.getAuthHeaders(),
     });
     if (!response.ok) throw new Error('Failed to toggle item status');
+    return await response.json();
+  }
+
+  // ==========================================
+  // --- STEP 4: WORK DISTRIBUTION & LEDGER ---
+  // ==========================================
+
+  async giveWork(data: {
+    worker_id: number;
+    item_id: number;
+    quantity_issued: number;
+    knot_style?: string;
+    issue_date?: string;
+    due_date?: string;
+    deductions?: number;
+    bonus?: number;
+    remarks?: string;
+  }): Promise<WorkDistributionItem> {
+    const response = await fetch(`${this.baseUrl}/distributions/give-work`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || 'Failed to issue work distribution');
+    }
+    return await response.json();
+  }
+
+  async receiveWork(data: {
+    distribution_id: number;
+    quantity_returned?: number;
+    quantity_rejected?: number;
+    rejection_reason?: string;
+    rejection_remarks?: string;
+    return_date?: string;
+    remarks?: string;
+  }): Promise<WorkReturnItem> {
+    const response = await fetch(`${this.baseUrl}/distributions/receive-work`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || 'Failed to record work return');
+    }
+    return await response.json();
+  }
+
+  async getPendingDistributions(workerId?: number): Promise<WorkDistributionItem[]> {
+    const query = new URLSearchParams();
+    if (workerId) query.set('worker_id', String(workerId));
+
+    const response = await fetch(`${this.baseUrl}/distributions/pending?${query.toString()}`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to fetch pending distributions');
+    return await response.json();
+  }
+
+  async getAllDistributions(params?: {
+    worker_id?: number;
+    status?: string;
+    q?: string;
+  }): Promise<WorkDistributionItem[]> {
+    const query = new URLSearchParams();
+    if (params?.worker_id) query.set('worker_id', String(params.worker_id));
+    if (params?.status) query.set('status', params.status);
+    if (params?.q) query.set('q', params.q);
+
+    const response = await fetch(`${this.baseUrl}/distributions/?${query.toString()}`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to load distributions');
+    return await response.json();
+  }
+
+  async getMaterialDebitCreditLedger(workerId: number): Promise<MaterialLedgerSummary> {
+    const response = await fetch(`${this.baseUrl}/distributions/ledger/${workerId}`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to load material debit-credit ledger');
+    return await response.json();
+  }
+
+  async reverseMaterialTransaction(
+    txnId: number,
+    data: { reason: string; notes?: string }
+  ): Promise<MaterialTransactionItem> {
+    const response = await fetch(`${this.baseUrl}/distributions/transactions/${txnId}/reverse`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || 'Failed to reverse transaction');
+    }
     return await response.json();
   }
 }

@@ -28,6 +28,8 @@ class Worker(Base):
 
     # Relationships
     work_distributions = relationship("WorkDistribution", back_populates="worker", cascade="all, delete-orphan")
+    work_returns = relationship("WorkReturn", back_populates="worker", cascade="all, delete-orphan")
     material_ledger_entries = relationship("MaterialLedgerEntry", back_populates="worker", cascade="all, delete-orphan")
+    material_transactions = relationship("MaterialTransaction", back_populates="worker", cascade="all, delete-orphan")
     payments = relationship("PaymentRecord", back_populates="worker", cascade="all, delete-orphan")
 
