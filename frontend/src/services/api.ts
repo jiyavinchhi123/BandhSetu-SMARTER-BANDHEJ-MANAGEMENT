@@ -183,6 +183,39 @@ export interface MaterialLedgerSummary {
   transactions: MaterialTransactionItem[];
 }
 
+export interface MoneyTransactionItem {
+  id: number;
+  transaction_code: string;
+  worker_id: number;
+  distribution_id?: number | null;
+  return_id?: number | null;
+  payment_record_id?: number | null;
+  transaction_date: string;
+  transaction_type: string;
+  description: string;
+  credit_amount: number;
+  debit_amount: number;
+  running_balance: number;
+  payment_mode?: string | null;
+  reference_no?: string | null;
+  recorded_by_name: string;
+  remarks?: string | null;
+  is_reversed: boolean;
+  reversal_reason?: string | null;
+  created_at: string;
+}
+
+export interface MoneyLedgerSummary {
+  worker_id: number;
+  worker_name: string;
+  worker_serial: string;
+  total_earned: number;
+  total_advance_taken: number;
+  total_payments_made: number;
+  remaining_payable: number;
+  transactions: MoneyTransactionItem[];
+}
+
 export interface MaterialLedgerItem {
   id: number;
   worker_id: number;
@@ -699,6 +732,86 @@ export class ApiClient {
       throw new Error(err.detail || 'Failed to reverse transaction');
     }
     return await response.json();
+  }
+
+  // ==========================================
+  // --- STEP 5: WAGES, PAYMENTS & MONEY LEDGER ---
+  // ==========================================
+
+  async recordAdvance(data: {
+    worker_id: number;
+    amount: number;
+    payment_mode?: string;
+    reference_no?: string;
+    payment_date?: string;
+    remarks?: string;
+  }): Promise<MoneyTransactionItem> {
+    const response = await fetch(`${this.baseUrl}/payments/advance`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || 'Failed to record advance');
+    }
+    return await response.json();
+  }
+
+  async recordPayout(data: {
+    worker_id: number;
+    amount: number;
+    payment_mode?: string;
+    reference_no?: string;
+    payment_date?: string;
+    is_full_settlement?: boolean;
+    remarks?: string;
+  }): Promise<MoneyTransactionItem> {
+    const response = await fetch(`${this.baseUrl}/payments/payout`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || 'Failed to record wage payout');
+    }
+    return await response.json();
+  }
+
+  async getMoneyLedger(
+    workerId: number,
+    params?: { start_date?: string; end_date?: string }
+  ): Promise<MoneyLedgerSummary> {
+    const query = new URLSearchParams();
+    if (params?.start_date) query.set('start_date', params.start_date);
+    if (params?.end_date) query.set('end_date', params.end_date);
+
+    const response = await fetch(`${this.baseUrl}/payments/ledger/${workerId}?${query.toString()}`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) throw new Error('Failed to load money debit-credit ledger');
+    return await response.json();
+  }
+
+  async reverseMoneyTransaction(
+    txnId: number,
+    data: { reason: string }
+  ): Promise<MoneyTransactionItem> {
+    const response = await fetch(`${this.baseUrl}/payments/transactions/${txnId}/reverse`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) {
+      const err = await response.json();
+      throw new Error(err.detail || 'Failed to reverse financial transaction');
+    }
+    return await response.json();
+  }
+
+  getStatementCsvUrl(workerId: number): string {
+    return `${this.baseUrl}/payments/statement/${workerId}/csv`;
   }
 }
 

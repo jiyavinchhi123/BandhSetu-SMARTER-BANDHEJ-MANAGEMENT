@@ -31,5 +31,6 @@ class Worker(Base):
     work_returns = relationship("WorkReturn", back_populates="worker", cascade="all, delete-orphan")
     material_ledger_entries = relationship("MaterialLedgerEntry", back_populates="worker", cascade="all, delete-orphan")
     material_transactions = relationship("MaterialTransaction", back_populates="worker", cascade="all, delete-orphan")
+    money_transactions = relationship("MoneyTransaction", back_populates="worker", cascade="all, delete-orphan")
     payments = relationship("PaymentRecord", back_populates="worker", cascade="all, delete-orphan")
 

@@ -9,6 +9,7 @@ from app.models.item import Item
 from app.models.work_distribution import WorkDistribution
 from app.models.work_return import WorkReturn
 from app.models.material_transaction import MaterialTransaction
+from app.models.money_transaction import MoneyTransaction
 from app.models.material_ledger import MaterialLedgerEntry
 from app.models.audit_log import AuditLog
 from app.utils.formatters import format_ist_datetime
@@ -288,7 +289,27 @@ class DistributionService:
         )
         db.add(mat_txn)
 
-        # 5. Audit Log
+        # 5. Worker-Account Perspective: CREDIT entry in Money Ledger (Work Earned = Credit wage)
+        if earned_wage > 0:
+            fin_code = f"FIN-{ret_date.strftime('%Y%m%d')}-{db.query(MoneyTransaction).count() + 1:04d}"
+            money_txn = MoneyTransaction(
+                transaction_code=fin_code,
+                worker_id=worker.id,
+                distribution_id=distribution.id,
+                return_id=work_return.id,
+                transaction_date=ret_date,
+                transaction_type="WORK_EARNING",
+                description=f"Work Earned: {qty_accepted} pcs of {distribution.item_name_snapshot} ({distribution.batch_code})",
+                credit_amount=earned_wage,
+                debit_amount=0.00,
+                running_balance=worker.payable_balance,
+                recorded_by_id=user_id,
+                recorded_by_name=user_name,
+                remarks=data.remarks or f"Accepted {qty_accepted} pcs at snapshot ₹{rate_snapshot:.2f}/pc",
+            )
+            db.add(money_txn)
+
+        # 6. Audit Log
         audit = AuditLog(
             user_id=user_id,
             user_email=user_name,

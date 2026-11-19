@@ -32,6 +32,7 @@ import {
 import { Button, Card, Badge, Input, LoadingSpinner } from '../components/ui';
 import { ItemSearchSelect } from '../components/common/ItemSearchSelect';
 import { MaterialDebitCreditLedger } from '../components/ledger/MaterialDebitCreditLedger';
+import { MoneyDebitCreditLedger } from '../components/ledger/MoneyDebitCreditLedger';
 import { formatINR, formatIndianDate } from '../utils/formatters';
 import { useToast } from '../hooks/useToast';
 
@@ -546,53 +547,9 @@ export const WorkerProfile: React.FC = () => {
 
       {/* 4. EARNINGS & MONEY LEDGER TAB */}
       {activeTab === 'earnings' && (
-        <Card className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-slate-900 text-base">Artisan Earnings & Wages Ledger</h3>
-              <p className="text-xs text-slate-500">
-                Calculated piece-rate remuneration with bonus and deductions
-              </p>
-            </div>
-            <div className="text-right">
-              <span className="text-xs text-slate-400 font-semibold">Total Net Value: </span>
-              <span className="text-base font-bold text-slate-900">{formatINR(worker.total_earned)}</span>
-            </div>
-          </div>
-
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase">
-                  <th className="p-3">Batch Code</th>
-                  <th className="p-3">Item</th>
-                  <th className="p-3 text-center">Qty</th>
-                  <th className="p-3 text-right">Locked Rate</th>
-                  <th className="p-3 text-right">Gross Wage</th>
-                  <th className="p-3 text-right">Bonus</th>
-                  <th className="p-3 text-right">Deductions</th>
-                  <th className="p-3 text-right">Net Payable</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {distributions.map((e) => (
-                  <tr key={e.id} className="hover:bg-slate-50/70">
-                    <td className="p-3 font-mono font-bold text-brand-700">{e.batch_code}</td>
-                    <td className="p-3 font-semibold text-slate-800">{e.item_name_snapshot}</td>
-                    <td className="p-3 text-center font-bold">{e.quantity_issued}</td>
-                    <td className="p-3 text-right font-mono">{formatINR(e.rate_per_piece)}</td>
-                    <td className="p-3 text-right font-bold text-slate-800">{formatINR(e.total_gross_wage)}</td>
-                    <td className="p-3 text-right text-emerald-600 font-semibold">+{formatINR(e.bonus)}</td>
-                    <td className="p-3 text-right text-rose-600 font-semibold">-{formatINR(e.deductions)}</td>
-                    <td className="p-3 text-right font-extrabold text-brand-700 text-sm">
-                      {formatINR(e.net_payable)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
+        <div className="space-y-6">
+          <MoneyDebitCreditLedger initialWorkerId={worker.id} showWorkerSelector={false} />
+        </div>
       )}
 
       {/* 5. ADVANCES & PAYMENTS TAB */}
