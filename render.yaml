@@ -1,0 +1,56 @@
+# ==============================================================================
+# BANDHSETU — RENDER INFRASTRUCTURE AS CODE (BLUEPRINT)
+# ==============================================================================
+# Deploys FastAPI backend service to Render cloud.
+# Automatically sets up build, start command, health checks, and environment vars.
+# ==============================================================================
+
+services:
+  - type: web
+    name: bandhsetu-api
+    runtime: python
+    region: singapore # Closest low-latency region to Gujarat, India
+    plan: free
+    branch: main
+    rootDir: backend
+    buildCommand: "pip install --upgrade pip && pip install -r requirements.txt && alembic upgrade head"
+    startCommand: "uvicorn app.main:app --host 0.0.0.0 --port $PORT --workers 2"
+    healthCheckPath: /api/v1/health
+    autoDeploy: true
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DEBUG
+        value: "false"
+      - key: PROJECT_NAME
+        value: "BandhSetu — Smarter Bandhej Management API"
+      - key: VERSION
+        value: "1.0.0"
+      - key: API_V1_STR
+        value: "/api/v1"
+      - key: TIMEZONE
+        value: "Asia/Kolkata"
+      - key: DEFAULT_CURRENCY
+        value: "INR"
+      - key: DEFAULT_MANAGER_START_TIME
+        value: "09:00"
+      - key: DEFAULT_MANAGER_END_TIME
+        value: "20:00"
+      - key: CORS_ORIGINS
+        sync: false # Set in Render Dashboard with production Vercel URL
+      - key: DATABASE_URL
+        sync: false # Set in Render Dashboard with Supabase PostgreSQL connection URI
+      - key: JWT_SECRET_KEY
+        generateValue: true # Render generates secure random 32-character key
+      - key: JWT_ALGORITHM
+        value: "HS256"
+      - key: ACCESS_TOKEN_EXPIRE_MINUTES
+        value: "840"
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false

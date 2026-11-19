@@ -59,6 +59,7 @@ pnpm-debug.log*
 *.sqlite
 *.sqlite3
 *.db
+backend/backups/
 .pytest_cache/
 .coverage
 htmlcov/

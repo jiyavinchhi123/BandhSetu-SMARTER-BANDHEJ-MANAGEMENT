@@ -1,6 +1,6 @@
 from pathlib import Path
-from typing import List, Union
-from pydantic import AnyHttpUrl, field_validator
+from typing import List, Union, Optional
+from pydantic import field_validator, AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 BACKEND_DIR = Path(__file__).resolve().parent.parent.parent
@@ -8,30 +8,50 @@ DEFAULT_SQLITE_PATH = (BACKEND_DIR / "bandhej_dev.db").as_posix()
 
 
 class Settings(BaseSettings):
-    ENVIRONMENT: str = "development"
+    # App Environment: supports APP_ENV or ENVIRONMENT
+    ENVIRONMENT: str = Field(
+        default="development",
+        validation_alias=AliasChoices("APP_ENV", "ENVIRONMENT")
+    )
     DEBUG: bool = True
-    PROJECT_NAME: str = "Bandhej Worker and Business Management API"
+    PROJECT_NAME: str = "BandhSetu — Smarter Bandhej Management API"
     VERSION: str = "1.0.0"
     API_V1_STR: str = "/api/v1"
 
-    # CORS
-    BACKEND_CORS_ORIGINS: List[str] = [
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "http://localhost:3000",
-    ]
+    # CORS: supports CORS_ORIGINS or BACKEND_CORS_ORIGINS
+    BACKEND_CORS_ORIGINS: List[str] = Field(
+        default=[
+            "http://localhost:5173",
+            "http://127.0.0.1:5173",
+            "http://localhost:3000",
+        ],
+        validation_alias=AliasChoices("CORS_ORIGINS", "BACKEND_CORS_ORIGINS")
+    )
 
     @field_validator("BACKEND_CORS_ORIGINS", mode="before")
     @classmethod
     def assemble_cors_origins(cls, v: Union[str, List[str]]) -> List[str]:
-        if isinstance(v, str) and not v.startswith("["):
+        if isinstance(v, str):
+            if v.startswith("["):
+                import json
+                try:
+                    return json.loads(v)
+                except Exception:
+                    pass
             return [i.strip() for i in v.split(",") if i.strip()]
-        elif isinstance(v, (list, str)):
+        elif isinstance(v, list):
             return v
         raise ValueError(v)
 
-    # Database: Default to backend/bandhej_dev.db with absolute posix path
+    # Database URL: Supports SQLite in dev, PostgreSQL/Supabase in production
     DATABASE_URL: str = f"sqlite:///{DEFAULT_SQLITE_PATH}"
+
+    @property
+    def normalized_database_url(self) -> str:
+        url = self.DATABASE_URL
+        if url.startswith("postgres://"):
+            return url.replace("postgres://", "postgresql://", 1)
+        return url
 
     # JWT Authentication & Security
     JWT_SECRET_KEY: str = "bandhej-super-secret-key-change-in-production-min32chars"
@@ -40,7 +60,11 @@ class Settings(BaseSettings):
 
     # Supabase Configuration
     SUPABASE_URL: str = "https://placeholder-supabase-id.supabase.co"
-    SUPABASE_KEY: str = "placeholder-supabase-anon-key"
+    SUPABASE_ANON_KEY: str = Field(
+        default="placeholder-supabase-anon-key",
+        validation_alias=AliasChoices("SUPABASE_ANON_KEY", "SUPABASE_KEY")
+    )
+    SUPABASE_SERVICE_ROLE_KEY: Optional[str] = None
     SUPABASE_JWT_SECRET: str = "placeholder-jwt-secret-min-32-chars-long"
 
     # Regional & Business Settings
@@ -54,13 +78,9 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
-        case_sensitive=True,
+        case_sensitive=False,
         extra="ignore"
     )
-
-    @property
-    def is_production(self) -> bool:
-        return self.ENVIRONMENT.lower() in ("production", "prod")
 
 
 settings = Settings()
