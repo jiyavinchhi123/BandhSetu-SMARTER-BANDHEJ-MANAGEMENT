@@ -5,7 +5,7 @@ import {
   Users,
   Layers,
   IndianRupee,
-  Package,
+  BarChart3,
 } from 'lucide-react';
 
 const mobileNavItems = [
@@ -13,7 +13,7 @@ const mobileNavItems = [
   { name: 'Workers', path: '/workers', icon: Users },
   { name: 'Batches', path: '/batches', icon: Layers },
   { name: 'Wages', path: '/payments', icon: IndianRupee },
-  { name: 'Stock', path: '/inventory', icon: Package },
+  { name: 'Reports', path: '/reports', icon: BarChart3 },
 ];
 
 export const MobileNav: React.FC = () => {

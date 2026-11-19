@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Layers,
   Plus,
@@ -54,8 +55,16 @@ const REJECTION_REASONS = [
 export const Batches: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const [searchParams] = useSearchParams();
 
   const [activeTab, setActiveTab] = useState<'orders' | 'give-work' | 'receive-work' | 'ledger'>('orders');
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'give-work' || tab === 'receive-work' || tab === 'ledger' || tab === 'orders') {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   // Consignments List State
   const [distributions, setDistributions] = useState<WorkDistributionItem[]>([]);

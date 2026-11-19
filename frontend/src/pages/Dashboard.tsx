@@ -1,507 +1,610 @@
-import React, { useState, useMemo } from 'react';
-import { useOutletContext } from 'react-router-dom';
+import React, { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import {
   Users,
-  Layers,
-  IndianRupee,
-  CheckCircle2,
-  Plus,
+  UserCheck,
+  Package,
+  PackagePlus,
+  ArrowDownLeft,
   ArrowUpRight,
   Clock,
-  Sparkles,
-  ShieldCheck,
+  IndianRupee,
+  Coins,
+  Wallet,
+  TrendingUp,
+  BarChart3,
+  Search,
+  UserPlus,
+  FileCheck,
+  RefreshCw,
+  AlertCircle,
   Calendar,
-  Filter,
+  Sparkles,
+  ChevronRight,
+  ShieldCheck,
 } from 'lucide-react';
-import { Card, Button, Badge, EmptyState, ConfirmDialog } from '../components/ui';
-import { formatINR, formatIndianDate, formatIndianDateTime } from '../utils/formatters';
-import { useToast } from '../hooks/useToast';
-import { HealthResponse } from '../services/api';
-
-interface OutletContextType {
-  searchTerm: string;
-  health: HealthResponse | null;
-  isHealthLoading: boolean;
-  refreshHealth: () => void;
-}
-
-interface BatchItem {
-  id: string;
-  batchCode: string;
-  artisanName: string;
-  village: string;
-  knotStyle: string;
-  pieces: number;
-  ratePerPiece: number;
-  totalPayable: number;
-  issuedDate: string;
-  dueDate: string;
-  status: 'In Progress' | 'Quality Check' | 'Ready for Payout' | 'Settled';
-}
-
-const mockBatches: BatchItem[] = [
-  {
-    id: '1',
-    batchCode: 'BAT-2026-089',
-    artisanName: 'Kamlaben Vaghela',
-    village: 'Anjar, Kutch',
-    knotStyle: 'Ekdali (Single Dot)',
-    pieces: 45,
-    ratePerPiece: 120,
-    totalPayable: 5400,
-    issuedDate: '2026-11-01',
-    dueDate: '2026-11-12',
-    status: 'Ready for Payout',
-  },
-  {
-    id: '2',
-    batchCode: 'BAT-2026-090',
-    artisanName: 'Santoshben Parmar',
-    village: 'Mandvi, Bhuj',
-    knotStyle: 'Shikari (Motif Work)',
-    pieces: 28,
-    ratePerPiece: 260,
-    totalPayable: 7280,
-    issuedDate: '2026-11-03',
-    dueDate: '2026-11-14',
-    status: 'In Progress',
-  },
-  {
-    id: '3',
-    batchCode: 'BAT-2026-091',
-    artisanName: 'Meenaben Solanki',
-    village: 'Jamnagar Rural',
-    knotStyle: 'Jaal (Intricate Mesh)',
-    pieces: 15,
-    ratePerPiece: 450,
-    totalPayable: 6750,
-    issuedDate: '2026-11-04',
-    dueDate: '2026-11-15',
-    status: 'Quality Check',
-  },
-  {
-    id: '4',
-    batchCode: 'BAT-2026-092',
-    artisanName: 'Geetaben Rathod',
-    village: 'Mundra',
-    knotStyle: 'Bharti (Dense Filling)',
-    pieces: 32,
-    ratePerPiece: 180,
-    totalPayable: 5760,
-    issuedDate: '2026-11-05',
-    dueDate: '2026-11-16',
-    status: 'In Progress',
-  },
-  {
-    id: '5',
-    batchCode: 'BAT-2026-087',
-    artisanName: 'Dhaniben Jadeja',
-    village: 'Khavda',
-    knotStyle: 'Laddu-Jalebi Circles',
-    pieces: 40,
-    ratePerPiece: 210,
-    totalPayable: 8400,
-    issuedDate: '2026-10-28',
-    dueDate: '2026-11-08',
-    status: 'Settled',
-  },
-];
+import {
+  api,
+  DashboardMetricsResponse,
+  TrendDataPoint,
+  RecentActivityItem,
+} from '../services/api';
+import { Card, Button, Badge, LoadingSpinner, EmptyState } from '../components/ui';
+import { formatINR, formatIndianDate } from '../utils/formatters';
+import { useAuth } from '../context/AuthContext';
+import { useToast } from '../context/ToastContext';
 
 export const Dashboard: React.FC = () => {
-  const { searchTerm } = useOutletContext<OutletContextType>();
+  const navigate = useNavigate();
+  const { user } = useAuth();
   const { showToast } = useToast();
 
-  const [batches, setBatches] = useState<BatchItem[]>(mockBatches);
-  const [selectedBatchForPayout, setSelectedBatchForPayout] = useState<BatchItem | null>(null);
-  const [isProcessingAction, setIsProcessingAction] = useState(false);
+  const [metrics, setMetrics] = useState<DashboardMetricsResponse | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [lastRefreshed, setLastRefreshed] = useState<Date>(new Date());
 
-  // Filter batches based on search
-  const filteredBatches = useMemo(() => {
-    if (!searchTerm.trim()) return batches;
-    const q = searchTerm.toLowerCase();
-    return batches.filter(
-      (b) =>
-        b.artisanName.toLowerCase().includes(q) ||
-        b.batchCode.toLowerCase().includes(q) ||
-        b.village.toLowerCase().includes(q) ||
-        b.knotStyle.toLowerCase().includes(q) ||
-        b.status.toLowerCase().includes(q)
-    );
-  }, [batches, searchTerm]);
+  const fetchDashboardData = useCallback(async (quiet = false) => {
+    if (!quiet) setIsLoading(true);
+    else setIsRefreshing(true);
 
-  // Aggregate KPI stats
-  const totalActiveWorkers = 384;
-  const activeBatchesCount = batches.filter((b) => b.status !== 'Settled').length;
-  const totalPendingPayout = batches
-    .filter((b) => b.status === 'Ready for Payout')
-    .reduce((sum, b) => sum + b.totalPayable, 0);
-
-  // Handle sensitive action: Payout confirmation
-  const handleConfirmPayout = () => {
-    if (!selectedBatchForPayout) return;
-
-    setIsProcessingAction(true);
-    setTimeout(() => {
-      setBatches((prev) =>
-        prev.map((b) =>
-          b.id === selectedBatchForPayout.id ? { ...b, status: 'Settled' } : b
-        )
-      );
-      setIsProcessingAction(false);
+    try {
+      const data = await api.getDashboardMetrics();
+      setMetrics(data);
+      setLastRefreshed(new Date());
+    } catch (err: any) {
       showToast({
-        type: 'success',
-        title: 'Payment Disbursed Successfully',
-        message: `${formatINR(selectedBatchForPayout.totalPayable)} recorded for ${
-          selectedBatchForPayout.artisanName
-        }.`,
+        type: 'error',
+        title: 'Dashboard Error',
+        message: err.message || 'Failed to load business analytics.',
       });
-      setSelectedBatchForPayout(null);
-    }, 800);
+    } finally {
+      setIsLoading(false);
+      setIsRefreshing(false);
+    }
+  }, [showToast]);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  // Quick Action navigation handlers
+  const handleQuickAction = (route: string) => {
+    navigate(route);
   };
 
-  const getStatusBadgeVariant = (status: BatchItem['status']) => {
-    switch (status) {
-      case 'Settled':
-        return 'success';
-      case 'Ready for Payout':
-        return 'info';
-      case 'Quality Check':
-        return 'warning';
-      default:
-        return 'neutral';
-    }
+  if (isLoading && !metrics) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[500px] gap-4">
+        <LoadingSpinner size="lg" />
+        <p className="text-sm font-medium text-gray-500 animate-pulse">
+          Aggregating BandhSetu business metrics and ledger data...
+        </p>
+      </div>
+    );
+  }
+
+  const m = metrics || {
+    total_registered_women: 0,
+    active_women: 0,
+    total_pieces_given: 0,
+    total_pieces_received: 0,
+    total_pending_pieces: 0,
+    total_accepted_work_value: 0,
+    total_wages_earned: 0,
+    total_advances: 0,
+    total_payments: 0,
+    total_outstanding_payable: 0,
+    trends: [],
+    recent_activity: [],
   };
+
+  const activePercent =
+    m.total_registered_women > 0
+      ? Math.round((m.active_women / m.total_registered_women) * 100)
+      : 0;
+
+  const returnPercent =
+    m.total_pieces_given > 0
+      ? Math.round((m.total_pieces_received / m.total_pieces_given) * 100)
+      : 0;
 
   return (
-    <div className="space-y-6">
-      {/* Welcome Banner */}
-      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-r from-slate-900 via-slate-800 to-brand-900 text-white p-6 sm:p-8 shadow-md">
-        <div className="relative z-10 max-w-2xl">
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white/10 backdrop-blur-md text-amber-300 text-xs font-semibold mb-3 border border-white/10">
-            <Sparkles className="w-3.5 h-3.5" />
-            <span>Kutch & Saurashtra Bandhej Cluster</span>
-          </div>
-          <h2 className="text-xl sm:text-2xl lg:text-3xl font-extrabold tracking-tight">
-            Bandhej Artisan Workshop Management
-          </h2>
-          <p className="mt-2 text-xs sm:text-sm text-slate-300 leading-relaxed">
-            Real-time tracking of piece-rate knotting, fabric consignments, quality audits,
-            and wage settlements for 380+ women craftswomen.
-          </p>
+    <div className="space-y-6 pb-12">
+      {/* ------------------------------------------------------------- */}
+      {/* 1. WELCOME BANNER & REFRESH BAR */}
+      {/* ------------------------------------------------------------- */}
+      <div className="bg-gradient-to-r from-emerald-800 via-teal-800 to-emerald-950 rounded-2xl p-6 text-white shadow-lg relative overflow-hidden">
+        <div className="absolute right-0 top-0 bottom-0 opacity-10 pointer-events-none flex items-center pr-8">
+          <Sparkles className="w-64 h-64 text-white" />
         </div>
-        <div className="absolute -right-8 -bottom-8 w-64 h-64 bg-brand-500/10 rounded-full blur-3xl pointer-events-none" />
-      </div>
-
-      {/* KPI Metric Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4">
-        {/* Metric 1 */}
-        <Card className="flex flex-col justify-between" hoverEffect>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Active Artisans</span>
-            <div className="w-9 h-9 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center">
-              <Users className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="text-2xl sm:text-3xl font-bold text-slate-900">
-              {totalActiveWorkers}
-            </div>
-            <p className="text-[11px] text-emerald-600 font-semibold flex items-center gap-1 mt-1">
-              <ArrowUpRight className="w-3.5 h-3.5" />
-              <span>+18 registered this month</span>
-            </p>
-          </div>
-        </Card>
-
-        {/* Metric 2 */}
-        <Card className="flex flex-col justify-between" hoverEffect>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Batches in Knotting</span>
-            <div className="w-9 h-9 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
-              <Layers className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="text-2xl sm:text-3xl font-bold text-slate-900">
-              {activeBatchesCount}
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" />
-              <span>160 Sarees under knotting</span>
-            </p>
-          </div>
-        </Card>
-
-        {/* Metric 3 */}
-        <Card className="flex flex-col justify-between" hoverEffect>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">Pending Wages</span>
-            <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <IndianRupee className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="text-2xl sm:text-3xl font-bold text-slate-900">
-              {formatINR(totalPendingPayout)}
-            </div>
-            <p className="text-[11px] text-brand-600 font-semibold mt-1">
-              Ready for immediate disbursal
-            </p>
-          </div>
-        </Card>
-
-        {/* Metric 4 */}
-        <Card className="flex flex-col justify-between" hoverEffect>
-          <div className="flex items-center justify-between">
-            <span className="text-xs font-medium text-slate-500">QC Pass Rate</span>
-            <div className="w-9 h-9 rounded-xl bg-sky-50 text-sky-600 flex items-center justify-center">
-              <ShieldCheck className="w-5 h-5" />
-            </div>
-          </div>
-          <div className="mt-4">
-            <div className="text-2xl sm:text-3xl font-bold text-slate-900">
-              98.4%
-            </div>
-            <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500" />
-              <span>Tying tension & dots verified</span>
-            </p>
-          </div>
-        </Card>
-      </div>
-
-      {/* Quick Action Buttons (Touch Friendly) */}
-      <div className="flex flex-wrap items-center gap-3">
-        <Button
-          variant="primary"
-          size="md"
-          icon={<Plus className="w-4 h-4" />}
-          onClick={() =>
-            showToast({
-              type: 'info',
-              title: 'Issue New Consignment',
-              message: 'Batch assignment modal will launch in Step 2.',
-            })
-          }
-        >
-          Issue New Batch
-        </Button>
-
-        <Button
-          variant="outline"
-          size="md"
-          icon={<IndianRupee className="w-4 h-4" />}
-          onClick={() =>
-            showToast({
-              type: 'info',
-              title: 'Batch Wage Payout',
-              message: 'Wage register calculation ready.',
-            })
-          }
-        >
-          Disburse Wages
-        </Button>
-
-        <Button
-          variant="outline"
-          size="md"
-          icon={<Users className="w-4 h-4" />}
-          onClick={() =>
-            showToast({
-              type: 'info',
-              title: 'Worker Registration',
-              message: 'Artisan enrollment form is staged.',
-            })
-          }
-        >
-          Add Artisan
-        </Button>
-      </div>
-
-      {/* Recent Batches Section */}
-      <div className="space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 relative z-10">
           <div>
-            <h3 className="text-base sm:text-lg font-bold text-slate-900">
-              Recent Production Batches
-            </h3>
-            <p className="text-xs text-slate-500">
-              Assigned fabric, knot styles, and wage calculation per artisan
+            <div className="flex items-center gap-2 mb-1">
+              <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-700/60 text-emerald-200 border border-emerald-500/30">
+                {user?.role === 'admin' ? 'Owner / Admin Portal' : 'Manager Operations Hub'}
+              </span>
+              <span className="text-xs text-emerald-200/80">
+                Asia/Kolkata (IST)
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
+              BandhSetu Executive Dashboard
+            </h1>
+            <p className="text-sm text-emerald-100/90 mt-1 max-w-2xl">
+              Real-time ledger overview for 200–500 Bandhej artisans across Jamnagar, Bhuj, and Mandvi.
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium text-slate-500 bg-white px-2.5 py-1.5 rounded-xl border border-slate-200 shadow-2xs flex items-center gap-1.5">
-              <Filter className="w-3.5 h-3.5 text-slate-400" />
-              Showing {filteredBatches.length} of {batches.length}
-            </span>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => fetchDashboardData(true)}
+              disabled={isRefreshing}
+              className="inline-flex items-center gap-2 px-3.5 py-2.5 rounded-xl bg-white/10 hover:bg-white/20 text-white text-xs font-medium backdrop-blur-sm border border-white/10 transition-all touch-manipulation min-h-[44px]"
+              title="Refresh dashboard metrics"
+            >
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+              <span>{isRefreshing ? 'Refreshing...' : 'Sync Live'}</span>
+            </button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => navigate('/reports')}
+              className="bg-white text-emerald-900 hover:bg-emerald-50 border-white text-xs font-semibold min-h-[44px]"
+            >
+              <BarChart3 className="w-4 h-4 mr-1.5 text-emerald-800" />
+              Full Reports
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 2. QUICK ACTION BUTTONS (Touch targets >= 44px) */}
+      {/* ------------------------------------------------------------- */}
+      <div>
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2.5 px-0.5">
+          Operational Quick Actions
+        </h2>
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2.5 sm:gap-3">
+          {/* Action 1: Add Worker */}
+          <button
+            onClick={() => handleQuickAction('/workers?action=add')}
+            className="flex flex-col items-center justify-center p-3 sm:p-3.5 rounded-xl bg-white hover:bg-emerald-50/50 border border-gray-200 hover:border-emerald-300 transition-all shadow-sm active:scale-95 min-h-[76px] text-center group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-emerald-100 text-emerald-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+              <UserPlus className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-semibold text-gray-800 leading-tight">Add Worker</span>
+            <span className="text-[10px] text-gray-400">Register artisan</span>
+          </button>
+
+          {/* Action 2: Search Worker */}
+          <button
+            onClick={() => handleQuickAction('/workers')}
+            className="flex flex-col items-center justify-center p-3 sm:p-3.5 rounded-xl bg-white hover:bg-blue-50/50 border border-gray-200 hover:border-blue-300 transition-all shadow-sm active:scale-95 min-h-[76px] text-center group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-blue-100 text-blue-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+              <Search className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-semibold text-gray-800 leading-tight">Search Worker</span>
+            <span className="text-[10px] text-gray-400">By serial or name</span>
+          </button>
+
+          {/* Action 3: Give Work */}
+          <button
+            onClick={() => handleQuickAction('/batches?tab=give-work')}
+            className="flex flex-col items-center justify-center p-3 sm:p-3.5 rounded-xl bg-white hover:bg-indigo-50/50 border border-gray-200 hover:border-indigo-300 transition-all shadow-sm active:scale-95 min-h-[76px] text-center group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+              <PackagePlus className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-semibold text-gray-800 leading-tight">Give Work</span>
+            <span className="text-[10px] text-gray-400">Issue fabric debit</span>
+          </button>
+
+          {/* Action 4: Receive Work */}
+          <button
+            onClick={() => handleQuickAction('/batches?tab=receive-work')}
+            className="flex flex-col items-center justify-center p-3 sm:p-3.5 rounded-xl bg-white hover:bg-teal-50/50 border border-gray-200 hover:border-teal-300 transition-all shadow-sm active:scale-95 min-h-[76px] text-center group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-teal-100 text-teal-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+              <FileCheck className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-semibold text-gray-800 leading-tight">Receive Work</span>
+            <span className="text-[10px] text-gray-400">QC & wage credit</span>
+          </button>
+
+          {/* Action 5: Record Advance */}
+          <button
+            onClick={() => handleQuickAction('/payments?tab=advance')}
+            className="flex flex-col items-center justify-center p-3 sm:p-3.5 rounded-xl bg-white hover:bg-amber-50/50 border border-gray-200 hover:border-amber-300 transition-all shadow-sm active:scale-95 min-h-[76px] text-center group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+              <Coins className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-semibold text-gray-800 leading-tight">Record Advance</span>
+            <span className="text-[10px] text-gray-400">Cash / UPI debit</span>
+          </button>
+
+          {/* Action 6: Make Payment */}
+          <button
+            onClick={() => handleQuickAction('/payments?tab=payout')}
+            className="flex flex-col items-center justify-center p-3 sm:p-3.5 rounded-xl bg-white hover:bg-purple-50/50 border border-gray-200 hover:border-purple-300 transition-all shadow-sm active:scale-95 min-h-[76px] text-center group"
+          >
+            <div className="w-9 h-9 rounded-lg bg-purple-100 text-purple-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+              <Wallet className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-semibold text-gray-800 leading-tight">Make Payment</span>
+            <span className="text-[10px] text-gray-400">Wage payout</span>
+          </button>
+
+          {/* Action 7: View Reports */}
+          <button
+            onClick={() => handleQuickAction('/reports')}
+            className="flex flex-col items-center justify-center p-3 sm:p-3.5 rounded-xl bg-white hover:bg-rose-50/50 border border-gray-200 hover:border-rose-300 transition-all shadow-sm active:scale-95 min-h-[76px] text-center group col-span-2 sm:col-span-1"
+          >
+            <div className="w-9 h-9 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center mb-1.5 group-hover:scale-110 transition-transform">
+              <BarChart3 className="w-5 h-5" />
+            </div>
+            <span className="text-xs font-semibold text-gray-800 leading-tight">View Reports</span>
+            <span className="text-[10px] text-gray-400">10 Analytics tabs</span>
+          </button>
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 3. THE 10 CORE DASHBOARD CARDS */}
+      {/* ------------------------------------------------------------- */}
+      <div>
+        <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2.5 px-0.5">
+          10 Core Business & Ledger Indicators
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 sm:gap-4">
+          {/* Card 1: Total Registered Women */}
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between text-gray-500 mb-2">
+              <span className="text-xs font-medium text-gray-600">Registered Women</span>
+              <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                <Users className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-gray-900 tracking-tight">
+                {m.total_registered_women}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Total registered artisan profiles
+              </p>
+            </div>
+          </div>
+
+          {/* Card 2: Active Women */}
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between text-gray-500 mb-2">
+              <span className="text-xs font-medium text-gray-600">Active Women</span>
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <UserCheck className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-emerald-700 tracking-tight flex items-baseline gap-2">
+                {m.active_women}
+                <span className="text-xs font-semibold text-emerald-600 bg-emerald-50 px-1.5 py-0.5 rounded">
+                  {activePercent}%
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Eligible for work distribution
+              </p>
+            </div>
+          </div>
+
+          {/* Card 3: Total Pieces Given */}
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between text-gray-500 mb-2">
+              <span className="text-xs font-medium text-gray-600">Pieces Given (Debit)</span>
+              <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <ArrowUpRight className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-indigo-900 tracking-tight">
+                {m.total_pieces_given.toLocaleString('en-IN')}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Cumulative pieces dispatched
+              </p>
+            </div>
+          </div>
+
+          {/* Card 4: Total Pieces Received */}
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between text-gray-500 mb-2">
+              <span className="text-xs font-medium text-gray-600">Pieces Received (Credit)</span>
+              <div className="w-7 h-7 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
+                <ArrowDownLeft className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-teal-700 tracking-tight flex items-baseline gap-2">
+                {m.total_pieces_received.toLocaleString('en-IN')}
+                <span className="text-xs font-semibold text-teal-600 bg-teal-50 px-1.5 py-0.5 rounded">
+                  {returnPercent}%
+                </span>
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Accepted finished tying work
+              </p>
+            </div>
+          </div>
+
+          {/* Card 5: Total Pending Pieces */}
+          <div className="bg-white rounded-xl p-4 border border-amber-200 shadow-sm flex flex-col justify-between bg-gradient-to-b from-amber-50/30 to-white">
+            <div className="flex items-center justify-between text-gray-500 mb-2">
+              <span className="text-xs font-medium text-amber-800">Pending Pieces</span>
+              <div className="w-7 h-7 rounded-lg bg-amber-100 text-amber-700 flex items-center justify-center">
+                <Clock className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className="text-2xl font-bold text-amber-700 tracking-tight">
+                {m.total_pending_pieces.toLocaleString('en-IN')}
+              </div>
+              <p className="text-[11px] text-amber-600/90 mt-0.5 font-medium">
+                Active in artisan custody
+              </p>
+            </div>
+          </div>
+
+          {/* Card 6: Total Accepted Work Value */}
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between text-gray-500 mb-2">
+              <span className="text-xs font-medium text-gray-600">Accepted Work Value</span>
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <Sparkles className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className="text-xl sm:text-2xl font-bold text-gray-900 tracking-tight">
+                {formatINR(m.total_accepted_work_value)}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Gross value of passed craft
+              </p>
+            </div>
+          </div>
+
+          {/* Card 7: Total Wages Earned */}
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between text-gray-500 mb-2">
+              <span className="text-xs font-medium text-gray-600">Total Wages Earned</span>
+              <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <IndianRupee className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className="text-xl sm:text-2xl font-bold text-emerald-700 tracking-tight">
+                {formatINR(m.total_wages_earned)}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Credit to women money ledger
+              </p>
+            </div>
+          </div>
+
+          {/* Card 8: Total Advances */}
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between text-gray-500 mb-2">
+              <span className="text-xs font-medium text-gray-600">Total Advances</span>
+              <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                <Coins className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className="text-xl sm:text-2xl font-bold text-amber-700 tracking-tight">
+                {formatINR(m.total_advances)}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Cash / UPI advances disbursed
+              </p>
+            </div>
+          </div>
+
+          {/* Card 9: Total Payments */}
+          <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between text-gray-500 mb-2">
+              <span className="text-xs font-medium text-gray-600">Total Payouts Made</span>
+              <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+                <Wallet className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className="text-xl sm:text-2xl font-bold text-purple-700 tracking-tight">
+                {formatINR(m.total_payments)}
+              </div>
+              <p className="text-[11px] text-gray-500 mt-0.5">
+                Settlements & wage payments
+              </p>
+            </div>
+          </div>
+
+          {/* Card 10: Total Outstanding Payable */}
+          <div className="bg-emerald-50/60 rounded-xl p-4 border-2 border-emerald-500/40 shadow-sm flex flex-col justify-between">
+            <div className="flex items-center justify-between text-gray-500 mb-2">
+              <span className="text-xs font-semibold text-emerald-900">Total Outstanding</span>
+              <div className="w-7 h-7 rounded-lg bg-emerald-600 text-white flex items-center justify-center shadow-xs">
+                <IndianRupee className="w-4 h-4" />
+              </div>
+            </div>
+            <div>
+              <div className="text-xl sm:text-2xl font-extrabold text-emerald-900 tracking-tight">
+                {formatINR(m.total_outstanding_payable)}
+              </div>
+              <p className="text-[11px] text-emerald-700 mt-0.5 font-medium">
+                Net remaining payable to women
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 4. 7-DAY OPERATIONAL & FINANCIAL TRENDS */}
+      {/* ------------------------------------------------------------- */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Trend Visualizer (2 Columns) */}
+        <div className="lg:col-span-2 bg-white rounded-xl p-5 border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4 text-emerald-600" />
+                7-Day Operations & Financial Activity
+              </h3>
+              <p className="text-xs text-gray-500">
+                Daily pieces issued vs. returned, and wages earned vs. cash disbursed
+              </p>
+            </div>
+            <div className="flex items-center gap-3 text-xs">
+              <span className="flex items-center gap-1.5 text-gray-600">
+                <span className="w-2.5 h-2.5 rounded-full bg-indigo-500 inline-block" />
+                Given
+              </span>
+              <span className="flex items-center gap-1.5 text-gray-600">
+                <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 inline-block" />
+                Received
+              </span>
+            </div>
+          </div>
+
+          {/* 7-Day Trend Chart Bars */}
+          <div className="space-y-3.5 pt-2">
+            {m.trends.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-8">
+                No activity recorded in the past 7 days.
+              </p>
+            ) : (
+              m.trends.map((t, idx) => {
+                const maxPieces = Math.max(
+                  ...m.trends.map((x) => Math.max(x.pieces_given, x.pieces_received, 1))
+                );
+                const givenWidth = Math.min(100, Math.round((t.pieces_given / maxPieces) * 100));
+                const receivedWidth = Math.min(100, Math.round((t.pieces_received / maxPieces) * 100));
+
+                return (
+                  <div key={idx} className="space-y-1">
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="font-medium text-gray-700 w-16">{t.date}</span>
+                      <div className="flex items-center gap-4 text-[11px] text-gray-500">
+                        <span>
+                          <strong className="text-indigo-700">{t.pieces_given}</strong> given
+                        </span>
+                        <span>
+                          <strong className="text-emerald-700">{t.pieces_received}</strong> received
+                        </span>
+                        <span>
+                          Earned:{' '}
+                          <strong className="text-gray-800">{formatINR(t.wages_earned)}</strong>
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Progress Bars */}
+                    <div className="space-y-1">
+                      <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden flex">
+                        <div
+                          className="h-full bg-indigo-500 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.max(givenWidth, 2)}%` }}
+                        />
+                      </div>
+                      <div className="h-2 w-full bg-gray-100 rounded-full overflow-hidden flex">
+                        <div
+                          className="h-full bg-emerald-500 rounded-full transition-all duration-500"
+                          style={{ width: `${Math.max(receivedWidth, 2)}%` }}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
         </div>
 
-        {filteredBatches.length === 0 ? (
-          <EmptyState
-            title="No batches match your search"
-            description={`No records found matching "${searchTerm}". Try a different artisan name or batch code.`}
-            actionLabel="Reset Search"
-            onAction={() => window.location.reload()}
-          />
-        ) : (
-          <>
-            {/* Desktop Table View (hidden on small screens) */}
-            <div className="hidden md:block overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-xs">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                    <th className="py-3 px-4">Batch Code</th>
-                    <th className="py-3 px-4">Artisan Worker</th>
-                    <th className="py-3 px-4">Knot Style</th>
-                    <th className="py-3 px-4 text-center">Pieces</th>
-                    <th className="py-3 px-4 text-right">Rate</th>
-                    <th className="py-3 px-4 text-right">Payable</th>
-                    <th className="py-3 px-4">Due Date</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4 text-right">Action</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100 text-sm">
-                  {filteredBatches.map((batch) => (
-                    <tr
-                      key={batch.id}
-                      className="hover:bg-slate-50/70 transition-colors group"
+        {/* ------------------------------------------------------------- */}
+        {/* 5. RECENT ACTIVITY FEED (1 Column) */}
+        {/* ------------------------------------------------------------- */}
+        <div className="bg-white rounded-xl p-5 border border-gray-200 shadow-sm flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-base font-semibold text-gray-900 flex items-center gap-2">
+                <Clock className="w-4 h-4 text-emerald-600" />
+                Live Operational Feed
+              </h3>
+              <span className="text-[10px] text-gray-400 uppercase tracking-wider font-semibold">
+                Recent 10 Events
+              </span>
+            </div>
+
+            <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+              {m.recent_activity.length === 0 ? (
+                <p className="text-xs text-gray-400 text-center py-8">
+                  No recent ledger transactions.
+                </p>
+              ) : (
+                m.recent_activity.map((act) => {
+                  let badgeColor = 'bg-blue-100 text-blue-700';
+                  if (act.category === 'RECEIVE') badgeColor = 'bg-emerald-100 text-emerald-700';
+                  if (act.category === 'ADVANCE') badgeColor = 'bg-amber-100 text-amber-700';
+                  if (act.category === 'PAYOUT') badgeColor = 'bg-purple-100 text-purple-700';
+
+                  return (
+                    <div
+                      key={act.id}
+                      className="p-2.5 rounded-lg border border-gray-100 hover:border-gray-200 bg-gray-50/50 hover:bg-white transition-all text-xs"
                     >
-                      <td className="py-3.5 px-4 font-mono font-medium text-xs text-brand-700">
-                        {batch.batchCode}
-                      </td>
-                      <td className="py-3.5 px-4">
-                        <p className="font-semibold text-slate-800">{batch.artisanName}</p>
-                        <p className="text-xs text-slate-400">{batch.village}</p>
-                      </td>
-                      <td className="py-3.5 px-4 text-xs text-slate-600 font-medium">
-                        {batch.knotStyle}
-                      </td>
-                      <td className="py-3.5 px-4 text-center font-semibold text-slate-700">
-                        {batch.pieces}
-                      </td>
-                      <td className="py-3.5 px-4 text-right text-xs text-slate-600 font-medium">
-                        {formatINR(batch.ratePerPiece)}
-                      </td>
-                      <td className="py-3.5 px-4 text-right font-bold text-slate-900">
-                        {formatINR(batch.totalPayable)}
-                      </td>
-                      <td className="py-3.5 px-4 text-xs text-slate-500">
-                        {formatIndianDate(batch.dueDate)}
-                      </td>
-                      <td className="py-3.5 px-4 text-center">
-                        <Badge variant={getStatusBadgeVariant(batch.status)} dot>
-                          {batch.status}
-                        </Badge>
-                      </td>
-                      <td className="py-3.5 px-4 text-right">
-                        {batch.status === 'Ready for Payout' ? (
-                          <Button
-                            variant="primary"
-                            size="sm"
-                            onClick={() => setSelectedBatchForPayout(batch)}
-                          >
-                            Pay ₹
-                          </Button>
-                        ) : (
-                          <span className="text-xs text-slate-400">—</span>
+                      <div className="flex items-center justify-between mb-1">
+                        <span
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${badgeColor}`}
+                        >
+                          {act.category}
+                        </span>
+                        <span className="text-[11px] text-gray-400">
+                          {act.date} · {act.timestamp_ist}
+                        </span>
+                      </div>
+                      <div className="font-medium text-gray-800 line-clamp-1">{act.title}</div>
+                      <div className="text-[11px] text-gray-500 line-clamp-1 mt-0.5">
+                        {act.description}
+                      </div>
+                      <div className="mt-1 flex items-center justify-between text-[11px] font-semibold">
+                        {act.pieces !== null && act.pieces !== undefined && (
+                          <span className="text-indigo-600">{act.pieces} pcs</span>
                         )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        {act.amount !== null && act.amount !== undefined && (
+                          <span className="text-emerald-700 ml-auto">
+                            {formatINR(act.amount)}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
+          </div>
 
-            {/* Mobile Card View (visible on mobile screens < md) */}
-            <div className="grid grid-cols-1 gap-3 md:hidden">
-              {filteredBatches.map((batch) => (
-                <div
-                  key={batch.id}
-                  className="bg-white rounded-2xl border border-slate-200/90 p-4 shadow-2xs space-y-3"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div>
-                      <span className="font-mono text-[11px] font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-md">
-                        {batch.batchCode}
-                      </span>
-                      <h4 className="font-bold text-slate-900 text-sm mt-1">
-                        {batch.artisanName}
-                      </h4>
-                      <p className="text-xs text-slate-500">{batch.village}</p>
-                    </div>
-                    <Badge variant={getStatusBadgeVariant(batch.status)} dot size="sm">
-                      {batch.status}
-                    </Badge>
-                  </div>
-
-                  <div className="grid grid-cols-2 gap-2 text-xs py-2 border-y border-slate-100 bg-slate-50/50 rounded-xl px-3">
-                    <div>
-                      <p className="text-[10px] text-slate-400 uppercase font-semibold">Style</p>
-                      <p className="font-medium text-slate-700 truncate">{batch.knotStyle}</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-slate-400 uppercase font-semibold">Quantity</p>
-                      <p className="font-semibold text-slate-800">{batch.pieces} Sarees</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-slate-400 uppercase font-semibold">Rate</p>
-                      <p className="font-medium text-slate-700">{formatINR(batch.ratePerPiece)}/pc</p>
-                    </div>
-                    <div>
-                      <p className="text-[10px] text-slate-400 uppercase font-semibold">Payable</p>
-                      <p className="font-bold text-brand-700 text-sm">
-                        {formatINR(batch.totalPayable)}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center justify-between text-xs text-slate-500 pt-1">
-                    <span className="flex items-center gap-1 text-[11px]">
-                      <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                      Due: {formatIndianDate(batch.dueDate)}
-                    </span>
-
-                    {batch.status === 'Ready for Payout' && (
-                      <Button
-                        variant="primary"
-                        size="sm"
-                        onClick={() => setSelectedBatchForPayout(batch)}
-                      >
-                        Disburse Payout
-                      </Button>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </>
-        )}
+          <div className="pt-3 border-t border-gray-100 mt-4">
+            <button
+              onClick={() => navigate('/reports?tab=daily-distribution')}
+              className="w-full flex items-center justify-center gap-1.5 py-2 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:bg-emerald-50 rounded-lg transition-colors min-h-[44px]"
+            >
+              <span>Audit All Daily Activity Logs</span>
+              <ChevronRight className="w-3.5 h-3.5" />
+            </button>
+          </div>
+        </div>
       </div>
-
-      {/* Confirmation Dialog for Sensitive Business Action */}
-      <ConfirmDialog
-        isOpen={selectedBatchForPayout !== null}
-        title="Confirm Wage Disbursement"
-        description={
-          selectedBatchForPayout
-            ? `Are you sure you want to disburse ${formatINR(
-                selectedBatchForPayout.totalPayable
-              )} to ${selectedBatchForPayout.artisanName} for Batch ${
-                selectedBatchForPayout.batchCode
-              }? This action records an immediate cash/bank transaction in the ledger.`
-            : ''
-        }
-        confirmText="Confirm & Disburse"
-        cancelText="Cancel"
-        variant="primary"
-        isLoading={isProcessingAction}
-        onConfirm={handleConfirmPayout}
-        onCancel={() => setSelectedBatchForPayout(null)}
-      />
     </div>
   );
 };
-

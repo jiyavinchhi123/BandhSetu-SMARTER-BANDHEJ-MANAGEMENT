@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   IndianRupee,
   Plus,
@@ -26,8 +27,16 @@ const PAYMENT_MODES = ['Cash', 'UPI', 'Bank Transfer', 'Cheque', 'Other'];
 export const Payments: React.FC = () => {
   const { user } = useAuth();
   const { showToast } = useToast();
+  const [searchParams] = useSearchParams();
 
   const [activeTab, setActiveTab] = useState<'ledger' | 'advance' | 'payout'>('ledger');
+
+  useEffect(() => {
+    const tab = searchParams.get('tab');
+    if (tab === 'advance' || tab === 'payout' || tab === 'ledger') {
+      setActiveTab(tab);
+    }
+  }, [searchParams]);
 
   // Advance Form State
   const [advWorkerSearch, setAdvWorkerSearch] = useState('');

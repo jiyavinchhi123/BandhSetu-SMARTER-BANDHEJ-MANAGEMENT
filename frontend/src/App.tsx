@@ -15,6 +15,7 @@ import { WorkerProfile } from './pages/WorkerProfile';
 import { Items } from './pages/Items';
 import { Batches } from './pages/Batches';
 import { Payments } from './pages/Payments';
+import { Reports } from './pages/Reports';
 import { Inventory } from './pages/Inventory';
 import { Settings } from './pages/Settings';
 import { ManagerAccessControl } from './pages/ManagerAccessControl';
@@ -45,6 +46,7 @@ export const App: React.FC = () => {
               <Route path="items" element={<Items />} />
               <Route path="batches" element={<Batches />} />
               <Route path="payments" element={<Payments />} />
+              <Route path="reports" element={<Reports />} />
               <Route path="inventory" element={<Inventory />} />
               <Route path="settings" element={<Settings />} />
 

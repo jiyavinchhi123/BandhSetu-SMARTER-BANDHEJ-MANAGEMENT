@@ -44,6 +44,13 @@ from app.schemas.payment import (
     MoneyLedgerSummary,
     FinancialReversalRequest,
 )
+from app.schemas.analytics import (
+    DashboardMetricsResponse,
+    TrendDataPoint,
+    RecentActivityItem,
+    ReportColumn,
+    ReportResponse,
+)
 
 __all__ = [
     "HealthResponse",

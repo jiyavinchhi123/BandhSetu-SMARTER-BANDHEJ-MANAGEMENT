@@ -11,6 +11,7 @@ import {
   Sparkles,
   ShieldAlert,
   LogOut,
+  BarChart3,
 } from 'lucide-react';
 import { APP_NAME, APP_TAGLINE } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
@@ -28,6 +29,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
     { name: 'Item Catalogue', path: '/items', icon: Tag },
     { name: 'Work Batches', path: '/batches', icon: Layers, badge: '42' },
     { name: 'Wages & Payouts', path: '/payments', icon: IndianRupee },
+    { name: 'Reports & Analytics', path: '/reports', icon: BarChart3 },
     { name: 'Fabric Inventory', path: '/inventory', icon: Package },
   ];
 

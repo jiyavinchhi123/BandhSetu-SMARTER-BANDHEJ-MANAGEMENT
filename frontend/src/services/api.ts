@@ -813,6 +813,113 @@ export class ApiClient {
   getStatementCsvUrl(workerId: number): string {
     return `${this.baseUrl}/payments/statement/${workerId}/csv`;
   }
+
+  // --- STEP 6: ANALYTICS & REPORTING METHODS ---
+  async getDashboardMetrics(): Promise<DashboardMetricsResponse> {
+    const response = await fetch(`${this.baseUrl}/analytics/dashboard`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to load dashboard metrics');
+    }
+    return await response.json();
+  }
+
+  async getReportData(params: ReportFilterParams): Promise<ReportResponse> {
+    const query = new URLSearchParams();
+    query.set('report_type', params.report_type);
+    if (params.date_preset) query.set('date_preset', params.date_preset);
+    if (params.start_date) query.set('start_date', params.start_date);
+    if (params.end_date) query.set('end_date', params.end_date);
+    if (params.worker_id) query.set('worker_id', String(params.worker_id));
+    if (params.item_id) query.set('item_id', String(params.item_id));
+    if (params.search_query) query.set('search_query', params.search_query);
+
+    const response = await fetch(`${this.baseUrl}/analytics/reports?${query.toString()}`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to load report data');
+    }
+    return await response.json();
+  }
+
+  getReportCsvUrl(params: ReportFilterParams): string {
+    const query = new URLSearchParams();
+    query.set('report_type', params.report_type);
+    if (params.date_preset) query.set('date_preset', params.date_preset);
+    if (params.start_date) query.set('start_date', params.start_date);
+    if (params.end_date) query.set('end_date', params.end_date);
+    if (params.worker_id) query.set('worker_id', String(params.worker_id));
+    if (params.item_id) query.set('item_id', String(params.item_id));
+    if (params.search_query) query.set('search_query', params.search_query);
+
+    return `${this.baseUrl}/analytics/reports/csv?${query.toString()}`;
+  }
+}
+
+// --- STEP 6: ANALYTICS & REPORTING INTERFACES ---
+export interface TrendDataPoint {
+  date: string;
+  pieces_given: number;
+  pieces_received: number;
+  wages_earned: number;
+  payouts_made: number;
+}
+
+export interface RecentActivityItem {
+  id: string;
+  category: string;
+  title: string;
+  description: string;
+  amount?: number | null;
+  pieces?: number | null;
+  date: string;
+  timestamp_ist: string;
+}
+
+export interface DashboardMetricsResponse {
+  total_registered_women: number;
+  active_women: number;
+  total_pieces_given: number;
+  total_pieces_received: number;
+  total_pending_pieces: number;
+  total_accepted_work_value: number;
+  total_wages_earned: number;
+  total_advances: number;
+  total_payments: number;
+  total_outstanding_payable: number;
+  trends: TrendDataPoint[];
+  recent_activity: RecentActivityItem[];
+}
+
+export interface ReportColumn {
+  key: string;
+  label: string;
+  align?: 'left' | 'center' | 'right';
+  format?: 'currency' | 'number' | 'date' | 'badge' | 'text';
+}
+
+export interface ReportResponse {
+  report_type: string;
+  report_title: string;
+  date_preset?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  total_records: number;
+  summary_metrics: Record<string, any>;
+  columns: ReportColumn[];
+  rows: Record<string, any>[];
+}
+
+export interface ReportFilterParams {
+  report_type: string;
+  date_preset?: string;
+  start_date?: string;
+  end_date?: string;
+  worker_id?: number;
+  item_id?: number;
+  search_query?: string;
 }
 
 export const api = new ApiClient();

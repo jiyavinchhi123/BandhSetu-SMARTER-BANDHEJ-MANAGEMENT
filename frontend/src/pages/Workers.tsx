@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Users,
   Search,
@@ -26,6 +26,7 @@ export const Workers: React.FC = () => {
   const { showToast } = useToast();
 
   const [workers, setWorkers] = useState<WorkerItem[]>([]);
+  const [searchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Active');
   const [selectedVillage, setSelectedVillage] = useState('All');
@@ -33,6 +34,12 @@ export const Workers: React.FC = () => {
 
   // Register Worker Modal state
   const [isRegisterOpen, setIsRegisterOpen] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('action') === 'add') {
+      setIsRegisterOpen(true);
+    }
+  }, [searchParams]);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [town, setTown] = useState('Bhuj');
