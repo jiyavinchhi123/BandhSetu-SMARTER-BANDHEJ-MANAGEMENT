@@ -14,6 +14,7 @@ from app.schemas.auth import (
 from app.services.access_control_service import access_control_service
 from app.utils.formatters import format_ist_datetime, get_current_ist_time
 from app.api.deps import get_current_user
+from app.core.rate_limiter import rate_limit
 
 router = APIRouter()
 
@@ -22,7 +23,8 @@ router = APIRouter()
 def login(
     req: LoginRequest,
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _rate_check: bool = Depends(rate_limit(max_requests=10, window_seconds=60)),
 ):
     """
     Authenticates Admin or Manager using email address or mobile number.
@@ -169,7 +171,8 @@ def get_me(
 def reset_password(
     req: PasswordResetRequest,
     request: Request,
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
+    _rate_check: bool = Depends(rate_limit(max_requests=5, window_seconds=60)),
 ):
     """Resets user password and revokes any active sessions."""
     identifier = req.identifier.strip()
