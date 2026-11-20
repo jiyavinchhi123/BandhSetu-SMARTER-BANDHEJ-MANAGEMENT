@@ -80,6 +80,9 @@ export interface ItemCatalogue {
   id: number;
   item_name: string;
   item_code?: string | null;
+  item_type?: string | null;
+  is_sarkam?: boolean;
+  is_choot?: boolean;
   price_per_piece: number;
   description?: string | null;
   is_active: boolean;
@@ -282,6 +285,31 @@ export class ApiClient {
     return headers;
   }
 
+  private async handleResponseError(response: Response, defaultMessage: string): Promise<never> {
+    let message = defaultMessage;
+    let code = 'ERROR';
+    try {
+      const data = await response.json();
+      if (typeof data.detail === 'string') {
+        message = data.detail;
+      } else if (data.detail?.message) {
+        message = data.detail.message;
+        code = data.detail.code || code;
+      } else if (Array.isArray(data.detail)) {
+        message = data.detail.map((e: any) => `${e.loc?.slice(-1)[0] || 'field'}: ${e.msg}`).join(', ');
+      }
+    } catch {}
+
+    if (response.status === 401) {
+      window.dispatchEvent(new CustomEvent('bandhej:unauthorized', { detail: message }));
+    }
+
+    const err = new Error(message);
+    (err as any).status = response.status;
+    (err as any).code = code;
+    throw err;
+  }
+
   async checkHealth(): Promise<HealthResponse> {
     try {
       const response = await fetch(`${this.baseUrl}/health`);
@@ -353,7 +381,7 @@ export class ApiClient {
     const response = await fetch(`${this.baseUrl}/managers/`, {
       headers: this.getAuthHeaders(),
     });
-    if (!response.ok) throw new Error('Failed to list managers');
+    if (!response.ok) await this.handleResponseError(response, 'Failed to list managers');
     return await response.json();
   }
 
@@ -363,7 +391,7 @@ export class ApiClient {
       headers: this.getAuthHeaders(),
       body: JSON.stringify(data),
     });
-    if (!response.ok) throw new Error('Failed to create manager');
+    if (!response.ok) await this.handleResponseError(response, 'Failed to create manager');
     return await response.json();
   }
 
@@ -373,7 +401,7 @@ export class ApiClient {
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ reason }),
     });
-    if (!response.ok) throw new Error('Failed to lock manager');
+    if (!response.ok) await this.handleResponseError(response, 'Failed to lock manager');
     return await response.json();
   }
 
@@ -382,7 +410,7 @@ export class ApiClient {
       method: 'POST',
       headers: this.getAuthHeaders(),
     });
-    if (!response.ok) throw new Error('Failed to unlock manager');
+    if (!response.ok) await this.handleResponseError(response, 'Failed to unlock manager');
     return await response.json();
   }
 
@@ -391,7 +419,7 @@ export class ApiClient {
       method: 'POST',
       headers: this.getAuthHeaders(),
     });
-    if (!response.ok) throw new Error('Failed to toggle manager state');
+    if (!response.ok) await this.handleResponseError(response, 'Failed to toggle manager state');
     return await response.json();
   }
 
@@ -401,7 +429,7 @@ export class ApiClient {
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ access_start_time, access_end_time }),
     });
-    if (!response.ok) throw new Error('Failed to update access timing');
+    if (!response.ok) await this.handleResponseError(response, 'Failed to update access timing');
     return await response.json();
   }
 
@@ -411,7 +439,7 @@ export class ApiClient {
       headers: this.getAuthHeaders(),
       body: JSON.stringify({ extend_minutes, reason: reason || 'Overtime business demand' }),
     });
-    if (!response.ok) throw new Error('Failed to extend hours');
+    if (!response.ok) await this.handleResponseError(response, 'Failed to extend hours');
     return await response.json();
   }
 
@@ -419,7 +447,7 @@ export class ApiClient {
     const response = await fetch(`${this.baseUrl}/managers/audit-logs/all?limit=${limit}`, {
       headers: this.getAuthHeaders(),
     });
-    if (!response.ok) throw new Error('Failed to fetch audit logs');
+    if (!response.ok) await this.handleResponseError(response, 'Failed to fetch audit logs');
     return await response.json();
   }
 
@@ -453,7 +481,7 @@ export class ApiClient {
   async createWorker(data: {
     full_name: string;
     phone: string;
-    town: string;
+    town?: string;
     address?: string;
     city?: string;
     village?: string;
@@ -467,8 +495,16 @@ export class ApiClient {
       body: JSON.stringify(data),
     });
     if (!response.ok) {
-      const err = await response.json();
-      throw new Error(err.detail || 'Failed to register artisan');
+      let message = 'Failed to register artisan';
+      try {
+        const err = await response.json();
+        if (typeof err.detail === 'string') {
+          message = err.detail;
+        } else if (Array.isArray(err.detail)) {
+          message = err.detail.map((e: any) => `${e.loc?.slice(-1)[0] || 'field'}: ${e.msg}`).join(', ');
+        }
+      } catch {}
+      throw new Error(message);
     }
     return await response.json();
   }
@@ -598,6 +634,9 @@ export class ApiClient {
   async createItem(data: {
     item_name: string;
     item_code?: string;
+    item_type?: string;
+    is_sarkam?: boolean;
+    is_choot?: boolean;
     price_per_piece: number;
     description?: string;
     is_active?: boolean;

@@ -35,7 +35,9 @@ export const Items: React.FC = () => {
   // Form State
   const [formData, setFormData] = useState({
     item_name: '',
-    item_code: '',
+    item_type: '',
+    is_sarkam: false,
+    is_choot: false,
     price_per_piece: '',
     description: '',
     is_active: true,
@@ -69,7 +71,9 @@ export const Items: React.FC = () => {
   const handleOpenAdd = () => {
     setFormData({
       item_name: '',
-      item_code: '',
+      item_type: '',
+      is_sarkam: false,
+      is_choot: false,
       price_per_piece: '',
       description: '',
       is_active: true,
@@ -81,7 +85,9 @@ export const Items: React.FC = () => {
     setEditingItem(item);
     setFormData({
       item_name: item.item_name,
-      item_code: item.item_code || '',
+      item_type: item.item_type || '',
+      is_sarkam: !!item.is_sarkam,
+      is_choot: !!item.is_choot,
       price_per_piece: item.price_per_piece.toString(),
       description: item.description || '',
       is_active: item.is_active,
@@ -113,7 +119,9 @@ export const Items: React.FC = () => {
       if (editingItem) {
         await api.updateItem(editingItem.id, {
           item_name: formData.item_name.trim(),
-          item_code: formData.item_code.trim() || undefined,
+          item_type: formData.item_type.trim() || undefined,
+          is_sarkam: formData.is_sarkam,
+          is_choot: formData.is_choot,
           price_per_piece: price,
           description: formData.description.trim() || undefined,
           is_active: formData.is_active,
@@ -127,7 +135,9 @@ export const Items: React.FC = () => {
       } else {
         await api.createItem({
           item_name: formData.item_name.trim(),
-          item_code: formData.item_code.trim() || undefined,
+          item_type: formData.item_type.trim() || undefined,
+          is_sarkam: formData.is_sarkam,
+          is_choot: formData.is_choot,
           price_per_piece: price,
           description: formData.description.trim() || undefined,
           is_active: formData.is_active,
@@ -349,8 +359,9 @@ export const Items: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                  <th className="py-3.5 px-4">Item Code</th>
                   <th className="py-3.5 px-4">Design / Item Name</th>
+                  <th className="py-3.5 px-4">Type</th>
+                  <th className="py-3.5 px-4">Work Option</th>
                   <th className="py-3.5 px-4">Description</th>
                   <th className="py-3.5 px-4 text-right">Price / Piece</th>
                   <th className="py-3.5 px-4 text-center">Status</th>
@@ -364,18 +375,35 @@ export const Items: React.FC = () => {
                     key={item.id}
                     className="hover:bg-slate-50/80 transition-colors group"
                   >
-                    <td className="py-3.5 px-4 font-mono font-bold text-xs text-slate-700">
-                      {item.item_code ? (
-                        <span className="bg-slate-100 px-2 py-0.5 rounded text-slate-800 border border-slate-200">
-                          {item.item_code}
-                        </span>
-                      ) : (
-                        <span className="text-slate-400 font-normal italic">None</span>
-                      )}
-                    </td>
                     <td className="py-3.5 px-4">
                       <div className="font-semibold text-slate-900">{item.item_name}</div>
                       <div className="text-xs text-slate-400">ID #{item.id}</div>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      {item.item_type ? (
+                        <span className="bg-slate-100 text-slate-800 font-medium px-2 py-0.5 rounded text-xs border border-slate-200">
+                          {item.item_type}
+                        </span>
+                      ) : (
+                        <span className="text-slate-400 text-xs">—</span>
+                      )}
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {item.is_sarkam && (
+                          <span className="bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded text-[11px] border border-indigo-200">
+                            Sarkam
+                          </span>
+                        )}
+                        {item.is_choot && (
+                          <span className="bg-amber-50 text-amber-800 font-semibold px-2 py-0.5 rounded text-[11px] border border-amber-200">
+                            Choot
+                          </span>
+                        )}
+                        {!item.is_sarkam && !item.is_choot && (
+                          <span className="text-slate-400 text-xs">—</span>
+                        )}
+                      </div>
                     </td>
                     <td className="py-3.5 px-4 text-slate-500 text-xs max-w-xs truncate">
                       {item.description || '—'}
@@ -454,11 +482,23 @@ export const Items: React.FC = () => {
                         {item.is_active ? 'Active' : 'Inactive'}
                       </span>
                     </div>
-                    {item.item_code && (
-                      <span className="font-mono text-xs text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded mt-1 inline-block">
-                        {item.item_code}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                      {item.item_type && (
+                        <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                          {item.item_type}
+                        </span>
+                      )}
+                      {item.is_sarkam && (
+                        <span className="bg-indigo-50 text-indigo-700 font-semibold px-1.5 py-0.5 rounded text-[10px] border border-indigo-200">
+                          Sarkam
+                        </span>
+                      )}
+                      {item.is_choot && (
+                        <span className="bg-amber-50 text-amber-800 font-semibold px-1.5 py-0.5 rounded text-[10px] border border-amber-200">
+                          Choot
+                        </span>
+                      )}
+                    </div>
                   </div>
                   <div className="text-right">
                     <div className="text-lg font-bold text-slate-900">
@@ -552,19 +592,19 @@ export const Items: React.FC = () => {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Item Code (Optional)
+                    Type (Suit, Dupatta, Saree...)
                   </label>
                   <input
                     type="text"
-                    value={formData.item_code}
+                    value={formData.item_type}
                     onChange={(e) =>
-                      setFormData({ ...formData, item_code: e.target.value.toUpperCase() })
+                      setFormData({ ...formData, item_type: e.target.value })
                     }
-                    placeholder="e.g. BDH-001"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm uppercase font-mono"
+                    placeholder="e.g. Saree, Suit, Dupatta"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                   />
                 </div>
 
@@ -589,6 +629,37 @@ export const Items: React.FC = () => {
                       className="w-full pl-8 pr-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-semibold focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                     />
                   </div>
+                </div>
+              </div>
+
+              {/* Work Option: Sarkam or Choot checkboxes */}
+              <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">
+                  Work Option (Sarkam / Choot)
+                </label>
+                <div className="flex items-center gap-6 pt-1">
+                  <label className="flex items-center gap-2 text-xs font-medium text-slate-800 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_sarkam}
+                      onChange={(e) =>
+                        setFormData({ ...formData, is_sarkam: e.target.checked })
+                      }
+                      className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300"
+                    />
+                    <span>Sarkam</span>
+                  </label>
+                  <label className="flex items-center gap-2 text-xs font-medium text-slate-800 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={formData.is_choot}
+                      onChange={(e) =>
+                        setFormData({ ...formData, is_choot: e.target.checked })
+                      }
+                      className="w-4 h-4 rounded text-brand-600 focus:ring-brand-500 border-slate-300"
+                    />
+                    <span>Choot</span>
+                  </label>
                 </div>
               </div>
 

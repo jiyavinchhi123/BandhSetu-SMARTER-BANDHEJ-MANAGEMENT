@@ -133,11 +133,21 @@ export const ItemSearchSelect: React.FC<ItemSearchSelectProps> = ({
                     }`}
                   >
                     <div className="min-w-0 pr-2">
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-semibold truncate">{item.item_name}</span>
-                        {item.item_code && (
-                          <span className="text-[10px] font-mono text-slate-400 bg-slate-100 px-1.5 py-0.2 rounded">
-                            {item.item_code}
+                        {item.item_type && (
+                          <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded">
+                            {item.item_type}
+                          </span>
+                        )}
+                        {item.is_sarkam && (
+                          <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1 py-0.2 rounded border border-indigo-200">
+                            Sarkam
+                          </span>
+                        )}
+                        {item.is_choot && (
+                          <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 px-1 py-0.2 rounded border border-amber-200">
+                            Choot
                           </span>
                         )}
                       </div>

@@ -6,7 +6,9 @@ import zoneinfo
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
 from fastapi import HTTPException
-from app.database.session import SessionLocal, Base, engine
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from app.database.session import Base
 from app.models.user import User
 from app.models.worker import Worker
 from app.models.item import Item
@@ -32,7 +34,11 @@ IST = zoneinfo.ZoneInfo("Asia/Kolkata")
 
 
 def run_master_verification():
-    db = SessionLocal()
+    test_db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "test_isolated_master.db"))
+    test_engine = create_engine(f"sqlite:///{test_db_path}", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=test_engine)
+    TestSession = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+    db = TestSession()
     print("=" * 75)
     print("BANDHSETU — STEP 7 MASTER E2E & SECURITY INTEGRITY VERIFICATION SUITE")
     print("=" * 75)
@@ -438,6 +444,12 @@ def run_master_verification():
 
     finally:
         db.close()
+        test_engine.dispose()
+        try:
+            if os.path.exists(test_db_path):
+                os.remove(test_db_path)
+        except Exception:
+            pass
 
 
 if __name__ == "__main__":

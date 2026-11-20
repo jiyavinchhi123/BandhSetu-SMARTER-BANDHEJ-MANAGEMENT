@@ -44,6 +44,7 @@ export const ManagerAccessControl: React.FC = () => {
   const [extendMinutes, setExtendMinutes] = useState(60);
   const [extendReason, setExtendReason] = useState('Overtime urgent batch dispatch');
   const [isExtending, setIsExtending] = useState(false);
+  const [togglingManagerId, setTogglingManagerId] = useState<number | null>(null);
 
   // New Manager modal
   const [isCreateOpen, setIsCreateOpen] = useState(false);
@@ -116,6 +117,8 @@ export const ManagerAccessControl: React.FC = () => {
 
   // Toggle Active
   const handleToggleActive = async (manager: UserProfile) => {
+    if (togglingManagerId !== null) return;
+    setTogglingManagerId(manager.id);
     try {
       const updated = await api.toggleManagerActive(manager.id);
       setManagers((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
@@ -126,7 +129,9 @@ export const ManagerAccessControl: React.FC = () => {
       });
       loadData();
     } catch (err: any) {
-      showToast({ type: 'error', title: 'Action Failed', message: err.message });
+      showToast({ type: 'error', title: 'Action Failed', message: err.message || 'Failed to toggle manager state.' });
+    } finally {
+      setTogglingManagerId(null);
     }
   };
 
@@ -380,11 +385,12 @@ export const ManagerAccessControl: React.FC = () => {
                 <Button
                   variant="ghost"
                   size="sm"
+                  disabled={togglingManagerId === m.id}
                   className={isActive ? 'text-slate-600' : 'text-emerald-700 font-semibold'}
                   onClick={() => handleToggleActive(m)}
                 >
-                  <Power className="w-3.5 h-3.5 mr-1" />
-                  {isActive ? 'Disable' : 'Enable'}
+                  <Power className={`w-3.5 h-3.5 mr-1 ${togglingManagerId === m.id ? 'animate-spin' : ''}`} />
+                  {togglingManagerId === m.id ? 'Updating...' : isActive ? 'Disable' : 'Enable'}
                 </Button>
               </div>
             </Card>

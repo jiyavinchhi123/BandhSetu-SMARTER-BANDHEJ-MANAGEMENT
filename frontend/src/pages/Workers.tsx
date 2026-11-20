@@ -76,11 +76,11 @@ export const Workers: React.FC = () => {
   // Handle worker registration
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !phone.trim() || !town.trim()) {
+    if (!fullName.trim() || !phone.trim()) {
       showToast({
         type: 'error',
         title: 'Required Fields Missing',
-        message: 'Full Name, Mobile Number and Town are mandatory.',
+        message: 'Full Name and Mobile Number are mandatory.',
       });
       return;
     }
@@ -90,7 +90,7 @@ export const Workers: React.FC = () => {
       const created = await api.createWorker({
         full_name: fullName.trim(),
         phone: phone.trim(),
-        town: town.trim(),
+        town: town.trim() || undefined,
         address: address.trim() || undefined,
         status: 'Active',
         remarks: remarks.trim() || undefined,
@@ -311,8 +311,7 @@ export const Workers: React.FC = () => {
                   placeholder="e.g. +91 98250 12345"
                 />
                 <Input
-                  label="Town *"
-                  required
+                  label="Town"
                   value={town}
                   onChange={(e) => setTown(e.target.value)}
                   placeholder="e.g. Anjar"

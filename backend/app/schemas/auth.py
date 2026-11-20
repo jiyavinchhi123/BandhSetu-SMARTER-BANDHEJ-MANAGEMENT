@@ -16,8 +16,8 @@ class TokenResponse(BaseModel):
     full_name: str
     email: str
     phone: Optional[str] = None
-    access_start_time: str
-    access_end_time: str
+    access_start_time: Optional[str] = "09:00"
+    access_end_time: Optional[str] = "20:00"
     is_extended: bool = False
     extension_until: Optional[str] = None
     server_time_ist: str
@@ -32,8 +32,8 @@ class UserResponse(BaseModel):
     is_active: bool
     is_locked: bool
     lock_reason: Optional[str] = None
-    access_start_time: str
-    access_end_time: str
+    access_start_time: Optional[str] = "09:00"
+    access_end_time: Optional[str] = "20:00"
     temporary_extension_until: Optional[datetime] = None
     last_login_at: Optional[datetime] = None
     last_login_ip: Optional[str] = None

@@ -5,8 +5,8 @@ from pydantic import BaseModel, Field, ConfigDict
 
 class WorkerBase(BaseModel):
     full_name: str = Field(..., min_length=2, description="Worker's Full Name", json_schema_extra={"example": "Kamlaben Vaghela"})
-    phone: str = Field(..., min_length=10, description="Mobile Number", json_schema_extra={"example": "+91 98250 12345"})
-    town: str = Field(..., min_length=2, json_schema_extra={"example": "Anjar"})
+    phone: str = Field(..., min_length=5, description="Mobile Number", json_schema_extra={"example": "+91 98250 12345"})
+    town: Optional[str] = Field(default="", description="Town / City", json_schema_extra={"example": "Anjar"})
     address: Optional[str] = Field(default=None, json_schema_extra={"example": "Near Khatri Chowk"})
     city: Optional[str] = Field(default="", json_schema_extra={"example": "Bhuj"})
     village: Optional[str] = Field(default="", json_schema_extra={"example": "Khavda"})

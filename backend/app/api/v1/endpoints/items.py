@@ -56,6 +56,9 @@ def create_item(
 
     item = Item(
         item_name=item_in.item_name.strip(),
+        item_type=item_in.item_type.strip() if item_in.item_type else None,
+        is_sarkam=bool(item_in.is_sarkam),
+        is_choot=bool(item_in.is_choot),
         item_code=item_in.item_code.strip() if item_in.item_code else None,
         price_per_piece=item_in.price_per_piece,
         description=item_in.description,

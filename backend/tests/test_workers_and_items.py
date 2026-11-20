@@ -7,11 +7,15 @@ from fastapi import HTTPException
 # Ensure backend directory is in sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-from app.database.session import Base, engine, SessionLocal
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from app.database.session import Base
 from app.models.user import User
 from app.models.worker import Worker
 from app.models.item import Item
 from app.models.work_distribution import WorkDistribution
+from app.models.payment_record import PaymentRecord
+from app.models.material_ledger import MaterialLedgerEntry
 from app.core.security import hash_password
 from app.schemas.worker import (
     WorkerCreate,
@@ -50,37 +54,52 @@ def run_tests():
     print("STARTING STEP 3 — WORKER & ITEM MANAGEMENT AUTOMATED TEST SUITE")
     print("=================================================================")
 
-    # Initialize tables
-    Base.metadata.drop_all(bind=engine)
-    Base.metadata.create_all(bind=engine)
-    db = SessionLocal()
-
+    test_db_path = os.path.abspath(os.path.join(os.path.dirname(__file__), "test_isolated_workers.db"))
+    test_engine = create_engine(f"sqlite:///{test_db_path}", connect_args={"check_same_thread": False})
+    Base.metadata.create_all(bind=test_engine)
+    TestSession = sessionmaker(autocommit=False, autoflush=False, bind=test_engine)
+    db = TestSession()
     # 1. Setup Admin and Manager users
-    admin = User(
-        email="admin@bandhej.com",
-        phone="+919876543210",
-        full_name="Bhavna Mehta (Admin)",
-        hashed_password=hash_password("Admin@123"),
-        role="admin",
-        is_active=True,
-        is_locked=False,
-        access_start_time="00:00",
-        access_end_time="23:59",
-        token_version=1
-    )
-    manager = User(
-        email="manager@bandhej.com",
-        phone="+919876543211",
-        full_name="Rajesh Patel (Manager)",
-        hashed_password=hash_password("Manager@123"),
-        role="manager",
-        is_active=True,
-        is_locked=False,
-        access_start_time="00:00",
-        access_end_time="23:59",
-        token_version=1
-    )
-    db.add_all([admin, manager])
+    admin = db.query(User).filter(User.email == "admin@bandhej.com").first()
+    if not admin:
+        admin = User(
+            email="admin@bandhej.com",
+            phone="+919876543210",
+            full_name="Bhavna Mehta (Admin)",
+            hashed_password=hash_password("Admin@123"),
+            role="admin",
+            is_active=True,
+            is_locked=False,
+            access_start_time="00:00",
+            access_end_time="23:59",
+            token_version=1
+        )
+        db.add(admin)
+
+    manager = db.query(User).filter(User.email == "manager@bandhej.com").first()
+    if not manager:
+        manager = User(
+            email="manager@bandhej.com",
+            phone="+919876543211",
+            full_name="Rajesh Patel (Manager)",
+            hashed_password=hash_password("Manager@123"),
+            role="manager",
+            is_active=True,
+            is_locked=False,
+            access_start_time="00:00",
+            access_end_time="23:59",
+            token_version=1
+        )
+        db.add(manager)
+    db.commit()
+
+    # Clean any residual test records to ensure fresh isolated state
+    from app.models.material_ledger import MaterialLedgerEntry
+    db.query(PaymentRecord).delete()
+    db.query(MaterialLedgerEntry).delete()
+    db.query(WorkDistribution).delete()
+    db.query(Worker).delete()
+    db.query(Item).delete()
     db.commit()
 
     # -------------------------------------------------------------
@@ -173,23 +192,32 @@ def run_tests():
     print("\n--- TEST 3: Item Catalogue Creation & Search ---")
     item1_in = ItemCreate(
         item_name="Pure Gajji Silk Saree - Bharti Knot",
-        item_code="GAJ-BHR-01",
+        item_type="Saree",
+        is_sarkam=True,
+        is_choot=False,
         price_per_piece=220.00,
         description="Heavy Gajji silk saree for intricate knotting",
         is_active=True
     )
     item1 = create_item(item1_in, admin_user=admin, db=db)
     assert item1.price_per_piece == 220.00
-    print(f"[PASS] Item created: {item1.item_name} at initial price ₹{item1.price_per_piece}/pc")
+    assert item1.item_type == "Saree"
+    assert item1.is_sarkam is True
+    assert item1.is_choot is False
+    print(f"[PASS] Item created: {item1.item_name} (Type: {item1.item_type}, Sarkam: {item1.is_sarkam}) at initial price ₹{item1.price_per_piece}/pc")
 
     item2_in = ItemCreate(
         item_name="Red Bridal Bandhej Gharchola",
-        item_code="GHR-BRD-05",
+        item_type="Dupatta",
+        is_sarkam=False,
+        is_choot=True,
         price_per_piece=480.00,
         description="Traditional wedding Gharchola with zari grid",
         is_active=True
     )
     item2 = create_item(item2_in, admin_user=admin, db=db)
+    assert item2.item_type == "Dupatta"
+    assert item2.is_choot is True
 
     # Search items typing 'R'
     matched_items = list_items(q="r", current_user=manager, db=db)
@@ -284,6 +312,12 @@ def run_tests():
     print(f"[PASS] Unified Timeline has {len(timeline)} events. Categories: {set(categories)}")
 
     db.close()
+    test_engine.dispose()
+    try:
+        if os.path.exists(test_db_path):
+            os.remove(test_db_path)
+    except Exception:
+        pass
     print("\n=================================================================")
     print("ALL 5 WORKER & ITEM MANAGEMENT TESTS PASSED (100% SUCCESS)")
     print("=================================================================")

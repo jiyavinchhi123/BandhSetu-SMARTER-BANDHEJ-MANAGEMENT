@@ -246,7 +246,6 @@ export const Batches: React.FC = () => {
         worker_id: selectedWorker.id,
         item_id: selectedItem.id,
         quantity_issued: Number(quantityIssued),
-        knot_style: knotStyle,
         issue_date: giveDate,
         due_date: dueDate,
         remarks: giveRemarks.trim() || undefined,
@@ -873,34 +872,18 @@ export const Batches: React.FC = () => {
               </div>
             </div>
 
-            {/* Knot Style & Due Date */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Knot Style / Pattern
-                </label>
-                <select
-                  value={knotStyle}
-                  onChange={(e) => setKnotStyle(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
-                >
-                  {KNOT_STYLES.map((style) => (
-                    <option key={style} value={style}>
-                      {style}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Estimated Due Date
-                </label>
+            {/* Estimated Due Date */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                Estimated Due Date
+              </label>
+              <div className="relative">
+                <Calendar className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
-                  className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                  className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
                 />
               </div>
             </div>

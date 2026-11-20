@@ -66,6 +66,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     refreshUser();
   }, [refreshUser]);
 
+  // Synchronize authentication across multiple browser tabs and handle 401 unauthorized
+  useEffect(() => {
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'bandhej_auth_token' || e.key === 'bandhej_user_role') {
+        const activeToken = localStorage.getItem('bandhej_auth_token');
+        setToken(activeToken);
+        if (activeToken) {
+          refreshUser();
+        } else {
+          clearAuth();
+        }
+      }
+    };
+
+    const handleUnauthorized = (e: any) => {
+      clearAuth();
+      const msg = e.detail || 'Session has expired or was revoked. Please log in again.';
+      triggerLockout(msg);
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    window.addEventListener('bandhej:unauthorized', handleUnauthorized as EventListener);
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+      window.removeEventListener('bandhej:unauthorized', handleUnauthorized as EventListener);
+    };
+  }, [clearAuth, refreshUser, triggerLockout]);
+
   // Client-side heartbeat to proactively check Manager hours against IST
   useEffect(() => {
     if (!user || user.role !== 'manager' || !token) return;

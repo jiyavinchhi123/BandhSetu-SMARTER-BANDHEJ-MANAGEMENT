@@ -19,6 +19,10 @@ import {
   Edit,
   Save,
   Tag,
+  ArrowDownLeft,
+  ArrowUpRight,
+  ShieldCheck,
+  X,
 } from 'lucide-react';
 import {
   api,
@@ -35,6 +39,22 @@ import { MaterialDebitCreditLedger } from '../components/ledger/MaterialDebitCre
 import { MoneyDebitCreditLedger } from '../components/ledger/MoneyDebitCreditLedger';
 import { formatINR, formatIndianDate } from '../utils/formatters';
 import { useToast } from '../hooks/useToast';
+
+const KNOT_STYLES = [
+  'Bharti (Dense Round Knots)',
+  'Ekdali (Single Dot Classic)',
+  'Shikari (Hunting & Animal Figures)',
+  'Jaal (All-Over Web Pattern)',
+  'Kodi (Shell Motif)',
+  'Standard Bandhej',
+];
+
+const getTodayIST = () => new Date().toISOString().split('T')[0];
+const getDefaultDueDate = () => {
+  const d = new Date();
+  d.setDate(d.getDate() + 14);
+  return d.toISOString().split('T')[0];
+};
 
 export const WorkerProfile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -62,16 +82,23 @@ export const WorkerProfile: React.FC = () => {
   const [payments, setPayments] = useState<PaymentItem[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
 
-  // Issue Work Modal State
+  // Issue Work / Give Work Consignment Modal State (Step 4 Debit-Credit Ledger)
   const [isDistributeOpen, setIsDistributeOpen] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ItemCatalogue | null>(null);
-  const [knotStyle, setKnotStyle] = useState('Bharti (Dense)');
-  const [quantity, setQuantity] = useState(20);
-  const [dueDate, setDueDate] = useState('');
-  const [bonus, setBonus] = useState(0);
-  const [deductions, setDeductions] = useState(0);
+  const [issueDate, setIssueDate] = useState(getTodayIST);
+  const [quantity, setQuantity] = useState<number | ''>(10);
+  const [dueDate, setDueDate] = useState(getDefaultDueDate);
   const [issueRemarks, setIssueRemarks] = useState('');
   const [isSubmittingWork, setIsSubmittingWork] = useState(false);
+
+  // Receive Return Modal State
+  const [selectedDistForReturn, setSelectedDistForReturn] = useState<WorkDistributionItem | null>(null);
+  const [returnQtyAccepted, setReturnQtyAccepted] = useState<number | ''>(0);
+  const [returnQtyRejected, setReturnQtyRejected] = useState<number | ''>(0);
+  const [returnDate, setReturnDate] = useState(getTodayIST);
+  const [rejectionReason, setRejectionReason] = useState('Broken Knots / Missing Knots');
+  const [returnRemarks, setReturnRemarks] = useState('');
+  const [isSubmittingReturn, setIsSubmittingReturn] = useState(false);
 
   // Record Payment Modal State
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
@@ -131,46 +158,113 @@ export const WorkerProfile: React.FC = () => {
     loadWorkerData();
   }, [loadWorkerData]);
 
-  // Issue Work Consignment Submission (Includes snapshot rate)
+  // Calculations for Give Work Modal
+  const unitPrice = selectedItem ? Number(selectedItem.price_per_piece) : 0;
+  const numPieces = typeof quantity === 'number' && !isNaN(quantity) ? quantity : 0;
+  const totalWorkValue = Math.round((numPieces * unitPrice + Number.EPSILON) * 100) / 100;
+
+  // Issue Work Consignment Submission (Step 4 Give Work with Material Ledger Debit)
   const handleIssueWork = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedItem) {
-      showToast({ type: 'error', title: 'Item Required', message: 'Please search and select an item.' });
+      showToast({ type: 'error', title: 'Item Design Required', message: 'Please search and select an item from catalogue.' });
       return;
     }
-    if (!dueDate) {
-      showToast({ type: 'error', title: 'Due Date Required', message: 'Please select an estimated return date.' });
+    if (!numPieces || numPieces <= 0) {
+      showToast({ type: 'error', title: 'Invalid Quantity', message: 'Number of pieces given must be at least 1.' });
       return;
     }
 
     setIsSubmittingWork(true);
     try {
-      const created = await api.distributeWork(workerId, {
+      const created = await api.giveWork({
+        worker_id: workerId,
         item_id: selectedItem.id,
-        knot_style: knotStyle,
-        quantity_issued: Number(quantity),
-        due_date: dueDate,
-        bonus: Number(bonus),
-        deductions: Number(deductions),
+        quantity_issued: numPieces,
+        issue_date: issueDate || getTodayIST(),
+        due_date: dueDate || undefined,
         remarks: issueRemarks.trim() || undefined,
       });
 
       showToast({
         type: 'success',
-        title: 'Consignment Dispatched',
-        message: `Batch ${created.batch_code} issued with rate ₹${created.rate_per_piece}/pc (Historical rate locked).`,
+        title: 'Consignment Dispatched!',
+        message: `Issued ${created.quantity_issued} pcs of ${created.item_name_snapshot} to ${worker?.full_name}. Batch ID: ${created.batch_code}`,
       });
 
       setIsDistributeOpen(false);
       setSelectedItem(null);
-      setQuantity(20);
-      setDueDate('');
+      setQuantity(10);
+      setIssueDate(getTodayIST());
+      setDueDate(getDefaultDueDate());
       setIssueRemarks('');
       loadWorkerData();
     } catch (err: any) {
-      showToast({ type: 'error', title: 'Failed to Issue Work', message: err.message });
+      showToast({
+        type: 'error',
+        title: 'Failed to Dispatch Consignment',
+        message: err.message || 'Error occurred while issuing consignment',
+      });
     } finally {
       setIsSubmittingWork(false);
+    }
+  };
+
+  // Open Receive Return Modal for a specific batch
+  const handleOpenReceiveModal = (dist: WorkDistributionItem) => {
+    setSelectedDistForReturn(dist);
+    setReturnQtyAccepted(dist.quantity_pending);
+    setReturnQtyRejected(0);
+    setReturnDate(getTodayIST());
+    setReturnRemarks('');
+  };
+
+  // Handle Receive Return Submission (Updates Issued status to Partially Returned / Completed)
+  const handleReceiveReturnSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedDistForReturn) return;
+
+    const accepted = typeof returnQtyAccepted === 'number' ? returnQtyAccepted : 0;
+    const rejected = typeof returnQtyRejected === 'number' ? returnQtyRejected : 0;
+    const total = accepted + rejected;
+
+    if (total <= 0) {
+      showToast({ type: 'error', title: 'Invalid Quantity', message: 'Please enter at least 1 piece to receive.' });
+      return;
+    }
+
+    if (total > selectedDistForReturn.quantity_pending) {
+      showToast({
+        type: 'error',
+        title: 'Exceeds Pending',
+        message: `Cannot return ${total} pieces. Only ${selectedDistForReturn.quantity_pending} pieces remain pending.`,
+      });
+      return;
+    }
+
+    setIsSubmittingReturn(true);
+    try {
+      const res = await api.receiveWork({
+        distribution_id: selectedDistForReturn.id,
+        quantity_returned: accepted,
+        quantity_rejected: rejected,
+        rejection_reason: rejected > 0 ? rejectionReason : undefined,
+        return_date: returnDate,
+        remarks: returnRemarks.trim() || undefined,
+      });
+
+      showToast({
+        type: 'success',
+        title: 'Work Return Recorded!',
+        message: `Received ${res.quantity_returned} accepted (Earned ${formatINR(res.completed_work_value)}) and ${res.quantity_rejected} rejected pieces. Status updated.`,
+      });
+
+      setSelectedDistForReturn(null);
+      loadWorkerData();
+    } catch (err: any) {
+      showToast({ type: 'error', title: 'Failed to Record Return', message: err.message });
+    } finally {
+      setIsSubmittingReturn(false);
     }
   };
 
@@ -450,6 +544,7 @@ export const WorkerProfile: React.FC = () => {
                     <th className="p-3 text-right">Net Payable</th>
                     <th className="p-3">Due Date</th>
                     <th className="p-3 text-center">Status</th>
+                    <th className="p-3 text-right">Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
@@ -475,6 +570,19 @@ export const WorkerProfile: React.FC = () => {
                         >
                           {d.status}
                         </Badge>
+                      </td>
+                      <td className="p-3 text-right">
+                        {d.quantity_pending > 0 ? (
+                          <button
+                            onClick={() => handleOpenReceiveModal(d)}
+                            className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg inline-flex items-center gap-1 transition-colors shadow-2xs"
+                          >
+                            <ArrowUpRight className="w-3.5 h-3.5" />
+                            Receive Return
+                          </button>
+                        ) : (
+                          <span className="text-xs text-slate-400 font-normal">Completed</span>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -704,116 +812,341 @@ export const WorkerProfile: React.FC = () => {
         </Card>
       )}
 
-      {/* MODAL: ISSUE WORK CONSIGNMENT (With Searchable Dropdown & Auto Price Fetch) */}
+      {/* MODAL: GIVE WORK / MATERIAL DISTRIBUTION FORM (Exact match to Work Batches Give Work Form) */}
       {isDistributeOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
-          <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl p-6 space-y-4 max-h-[90vh] overflow-y-auto">
-            <div className="border-b pb-3">
-              <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Layers className="w-5 h-5 text-brand-600" />
-                Issue Work Consignment to {worker.full_name}
-              </h3>
-              <p className="text-xs text-slate-500">
-                Select fabric item to automatically fetch its piece rate and lock the historical snapshot.
-              </p>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
+          <div className="w-full max-w-2xl bg-white rounded-3xl shadow-2xl p-6 sm:p-8 space-y-6 max-h-[92vh] overflow-y-auto my-auto border border-slate-200">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-rose-50 text-rose-600">
+                  <ArrowDownLeft className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg sm:text-xl font-bold text-slate-900">
+                    Give Work / Material Distribution Form
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Dispatches raw cloth & tying thread. Automatically generates unique Distribution ID & snapshots piece price.
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsDistributeOpen(false)}
+                className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
             </div>
 
-            <form onSubmit={handleIssueWork} className="space-y-4">
-              {/* Searchable Dropdown */}
-              <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700">
-                  Select Item Catalogue * (Type to search, e.g. "R")
+            <form onSubmit={handleIssueWork} className="space-y-5">
+              {/* 1. Date Picker (defaults today in IST) */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Issue Date (IST) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <Calendar className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="date"
+                    required
+                    value={issueDate}
+                    onChange={(e) => setIssueDate(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* 2. Worker Card */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Select Woman Artisan Worker <span className="text-rose-500">*</span>
+                </label>
+                <div className="p-3.5 bg-brand-50/60 border border-brand-200 rounded-2xl flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-brand-600 text-white flex items-center justify-center font-bold text-sm">
+                      {worker.full_name.charAt(0)}
+                    </div>
+                    <div>
+                      <div className="font-bold text-slate-900 text-sm">{worker.full_name}</div>
+                      <div className="text-xs text-slate-500">
+                        Serial: <span className="font-mono font-semibold">{worker.serial_number}</span> • Town: {worker.town || worker.village || 'Kutch'}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="text-xs font-semibold text-brand-700 bg-white px-2.5 py-1 rounded-lg border border-brand-200">
+                    Active Artisan
+                  </span>
+                </div>
+              </div>
+
+              {/* 3. Searchable Item Dropdown & Snapshot Price */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Item / Design Selection <span className="text-rose-500">*</span>
                 </label>
                 <ItemSearchSelect
                   value={selectedItem?.id || null}
                   onChange={(item) => setSelectedItem(item)}
+                  placeholder="Type item design name (e.g. 'Rani', 'Saree', 'Dupatta')..."
                 />
               </div>
 
-              {/* Automatically Fetched Price Display */}
-              {selectedItem && (
-                <div className="p-3 bg-brand-50 rounded-xl border border-brand-200 text-xs flex items-center justify-between">
-                  <div>
-                    <span className="font-bold text-brand-900">{selectedItem.item_name}</span>
-                    <p className="text-[11px] text-brand-700">Historical snapshot rate applicable</p>
-                  </div>
-                  <div className="text-right">
-                    <span className="text-[10px] text-brand-600 uppercase font-semibold">Piece Rate:</span>
-                    <p className="text-base font-extrabold text-brand-800">
-                      {formatINR(selectedItem.price_per_piece)}/pc
-                    </p>
-                  </div>
-                </div>
-              )}
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <div className="space-y-1.5">
-                  <label className="block text-xs font-medium text-slate-700">Knot Style *</label>
-                  <select
-                    value={knotStyle}
-                    onChange={(e) => setKnotStyle(e.target.value)}
-                    className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm font-medium"
-                  >
-                    <option value="Bharti (Dense)">Bharti (Dense)</option>
-                    <option value="Ekdali (Single Dot)">Ekdali (Single Dot)</option>
-                    <option value="Shikari (Motif)">Shikari (Motif)</option>
-                    <option value="Jaal (All-Over Mesh)">Jaal (All-Over Mesh)</option>
-                    <option value="Laddu-Jalebi Circles">Laddu-Jalebi Circles</option>
-                  </select>
+              {/* 4. Number of Pieces Given & Automatic Work Value Calculation */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Number of Pieces Given <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="1"
+                    required
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value === '' ? '' : parseInt(e.target.value))}
+                    placeholder="10"
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-base font-bold focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
+                  />
                 </div>
 
-                <Input
-                  label="Quantity of Sarees/Pieces *"
-                  type="number"
-                  min="1"
-                  required
-                  value={quantity}
-                  onChange={(e) => setQuantity(Number(e.target.value))}
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input
-                  label="Estimated Return Due Date *"
-                  type="date"
-                  required
-                  value={dueDate}
-                  onChange={(e) => setDueDate(e.target.value)}
-                />
-                <Input
-                  label="Incentive Bonus (₹)"
-                  type="number"
-                  min="0"
-                  value={bonus}
-                  onChange={(e) => setBonus(Number(e.target.value))}
-                />
-              </div>
-
-              {/* Calculated Wage Preview */}
-              {selectedItem && (
-                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs flex items-center justify-between font-medium">
-                  <span>Gross Calculated Wage:</span>
-                  <span className="text-sm font-bold text-slate-900">
-                    {quantity} × {formatINR(selectedItem.price_per_piece)} + ₹{bonus} ={' '}
-                    <span className="text-brand-700">
-                      {formatINR(quantity * selectedItem.price_per_piece + Number(bonus))}
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Total Work Value (Auto-Calculated)
+                  </label>
+                  <div className="px-4 py-2.5 bg-slate-100/80 border border-slate-200 rounded-xl flex items-center justify-between">
+                    <span className="text-xs text-slate-500">
+                      {numPieces} pcs × {formatINR(unitPrice, true)}
                     </span>
-                  </span>
+                    <span className="text-lg font-black text-slate-900">
+                      {formatINR(totalWorkValue)}
+                    </span>
+                  </div>
                 </div>
-              )}
+              </div>
 
-              <div className="flex justify-end gap-2 pt-2 border-t">
-                <Button
+              {/* 5. Estimated Due Date */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Estimated Due Date
+                </label>
+                <div className="relative">
+                  <Calendar className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="date"
+                    value={dueDate}
+                    onChange={(e) => setDueDate(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* 6. Remarks / Notes */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Remarks / Notes
+                </label>
+                <textarea
+                  rows={2}
+                  value={issueRemarks}
+                  onChange={(e) => setIssueRemarks(e.target.value)}
+                  placeholder="e.g. Festival priority dispatch / special white silk border"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                />
+              </div>
+
+              {/* 7. Historical Price Protection Disclaimer */}
+              <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/80 flex items-start gap-2.5 text-amber-900 text-xs">
+                <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Historical Price Protection:</strong> The current catalogue rate ({formatINR(unitPrice, true)}/pc) will be permanently locked into this transaction. Multiple consignments can be assigned to this worker today.
+                </span>
+              </div>
+
+              {/* 8. Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
                   type="button"
-                  variant="outline"
                   onClick={() => setIsDistributeOpen(false)}
                   disabled={isSubmittingWork}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-semibold transition-colors"
                 >
                   Cancel
-                </Button>
-                <Button type="submit" variant="primary" isLoading={isSubmittingWork}>
-                  Confirm & Dispatch Batch
-                </Button>
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingWork}
+                  className="py-3 px-6 bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold rounded-2xl shadow-md shadow-brand-500/20 transition-all text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <ArrowDownLeft className="w-5 h-5" />
+                  <span>{isSubmittingWork ? 'Issuing Consignment...' : 'Dispatch Consignment (Debit Material)'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL: RECEIVE RETURN WORK */}
+      {selectedDistForReturn && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in overflow-y-auto">
+          <div className="w-full max-w-lg bg-white rounded-3xl shadow-2xl p-6 sm:p-8 space-y-5 max-h-[92vh] overflow-y-auto my-auto border border-slate-200">
+            {/* Header */}
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="p-3 rounded-2xl bg-emerald-50 text-emerald-600">
+                  <ArrowUpRight className="w-6 h-6" />
+                </div>
+                <div>
+                  <h2 className="text-lg font-bold text-slate-900">
+                    Receive Work Return
+                  </h2>
+                  <p className="text-xs text-slate-500">
+                    Batch: <span className="font-mono font-bold text-slate-700">{selectedDistForReturn.batch_code}</span> • {selectedDistForReturn.item_name_snapshot}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedDistForReturn(null)}
+                className="text-slate-400 hover:text-slate-600 p-2 rounded-xl hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleReceiveReturnSubmit} className="space-y-4">
+              {/* Batch Summary */}
+              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-3 gap-2 text-center text-xs">
+                <div>
+                  <p className="text-slate-400 font-semibold uppercase text-[10px]">Issued</p>
+                  <p className="font-bold text-slate-800 text-sm mt-0.5">{selectedDistForReturn.quantity_issued} pcs</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 font-semibold uppercase text-[10px]">Pending</p>
+                  <p className="font-bold text-amber-700 text-sm mt-0.5">{selectedDistForReturn.quantity_pending} pcs</p>
+                </div>
+                <div>
+                  <p className="text-slate-400 font-semibold uppercase text-[10px]">Piece Rate</p>
+                  <p className="font-bold text-slate-800 text-sm mt-0.5">₹{selectedDistForReturn.rate_per_piece}/pc</p>
+                </div>
+              </div>
+
+              {/* Return Date */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Return Date (IST) <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <Calendar className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+                  <input
+                    type="date"
+                    required
+                    value={returnDate}
+                    onChange={(e) => setReturnDate(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 font-medium"
+                  />
+                </div>
+              </div>
+
+              {/* Quantities: Accepted & Rejected */}
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1.5">
+                    Accepted Pieces <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={selectedDistForReturn.quantity_pending}
+                    required
+                    value={returnQtyAccepted}
+                    onChange={(e) => setReturnQtyAccepted(e.target.value === '' ? '' : parseInt(e.target.value))}
+                    className="w-full px-3.5 py-2.5 bg-emerald-50/50 border border-emerald-300 rounded-xl text-base font-bold text-emerald-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
+                  />
+                  <p className="text-[11px] text-emerald-600 mt-1">Generates artisan wage</p>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-amber-800 uppercase tracking-wider mb-1.5">
+                    Rejected / QC Defect
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max={selectedDistForReturn.quantity_pending}
+                    value={returnQtyRejected}
+                    onChange={(e) => setReturnQtyRejected(e.target.value === '' ? '' : parseInt(e.target.value))}
+                    className="w-full px-3.5 py-2.5 bg-amber-50/50 border border-amber-300 rounded-xl text-base font-bold text-amber-900 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
+                  />
+                  <p className="text-[11px] text-amber-600 mt-1">₹0.00 wage credited</p>
+                </div>
+              </div>
+
+              {/* Earned Wage Preview */}
+              <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between text-xs">
+                <span className="font-semibold text-emerald-800">
+                  Artisan Earned Wage:
+                </span>
+                <span className="text-base font-black text-emerald-900">
+                  {typeof returnQtyAccepted === 'number' ? returnQtyAccepted : 0} pcs × ₹{selectedDistForReturn.rate_per_piece} = {formatINR((typeof returnQtyAccepted === 'number' ? returnQtyAccepted : 0) * selectedDistForReturn.rate_per_piece)}
+                </span>
+              </div>
+
+              {/* Rejection Reason (only if rejected > 0) */}
+              {(typeof returnQtyRejected === 'number' && returnQtyRejected > 0) && (
+                <div>
+                  <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Defect / Rejection Reason
+                  </label>
+                  <select
+                    value={rejectionReason}
+                    onChange={(e) => setRejectionReason(e.target.value)}
+                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium"
+                  >
+                    <option value="Broken Knots / Missing Knots">Broken Knots / Missing Knots</option>
+                    <option value="Fabric Torn / Needle Punched">Fabric Torn / Needle Punched</option>
+                    <option value="Uneven / Irregular Knots">Uneven / Irregular Knots</option>
+                    <option value="Stains / Dye Bleed / Discoloration">Stains / Dye Bleed / Discoloration</option>
+                    <option value="Pattern / Design Mismatch">Pattern / Design Mismatch</option>
+                    <option value="Loose Knotting (Unraveling)">Loose Knotting (Unraveling)</option>
+                    <option value="Other Defect">Other Defect</option>
+                  </select>
+                </div>
+              )}
+
+              {/* Remarks */}
+              <div>
+                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
+                  Remarks / Notes
+                </label>
+                <textarea
+                  rows={2}
+                  value={returnRemarks}
+                  onChange={(e) => setReturnRemarks(e.target.value)}
+                  placeholder="e.g. Quality approved by master artisan"
+                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
+                />
+              </div>
+
+              {/* Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                <button
+                  type="button"
+                  onClick={() => setSelectedDistForReturn(null)}
+                  disabled={isSubmittingReturn}
+                  className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-semibold transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingReturn}
+                  className="py-3 px-6 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold rounded-2xl shadow-md shadow-emerald-500/20 transition-all text-sm flex items-center justify-center gap-2 disabled:opacity-50"
+                >
+                  <ArrowUpRight className="w-5 h-5" />
+                  <span>{isSubmittingReturn ? 'Recording Return...' : 'Record Return & Credit Balance'}</span>
+                </button>
               </div>
             </form>
           </div>
