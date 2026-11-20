@@ -335,7 +335,7 @@ export const Payments: React.FC = () => {
                     <div>
                       <div className="font-bold text-slate-900 text-sm">{selectedAdvWorker.full_name}</div>
                       <div className="text-xs text-slate-500">
-                        Serial: <span className="font-mono font-semibold">{selectedAdvWorker.serial_number}</span> • Village: {selectedAdvWorker.village}
+                        Serial: <span className="font-mono font-semibold">{selectedAdvWorker.serial_number}</span> • Town: {selectedAdvWorker.town || selectedAdvWorker.village}
                       </div>
                     </div>
                   </div>
@@ -377,7 +377,7 @@ export const Payments: React.FC = () => {
                             <span className="ml-2 font-mono text-slate-500 text-[11px] bg-slate-100 px-1.5 py-0.5 rounded">
                               {w.serial_number}
                             </span>
-                            <div className="text-[11px] text-slate-400">{w.village}</div>
+                            <div className="text-[11px] text-slate-400">{w.town || w.village}</div>
                           </div>
                           <div className="text-right">
                             <span className="text-[10px] text-slate-400 block">Payable Balance</span>
@@ -554,7 +554,7 @@ export const Payments: React.FC = () => {
                     <div>
                       <div className="font-bold text-slate-900 text-sm">{selectedPayWorker.full_name}</div>
                       <div className="text-xs text-slate-500">
-                        Serial: <span className="font-mono font-semibold">{selectedPayWorker.serial_number}</span> • Village: {selectedPayWorker.village}
+                        Serial: <span className="font-mono font-semibold">{selectedPayWorker.serial_number}</span> • Town: {selectedPayWorker.town || selectedPayWorker.village}
                       </div>
                     </div>
                   </div>

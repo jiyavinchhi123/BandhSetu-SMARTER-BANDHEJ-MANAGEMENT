@@ -771,7 +771,7 @@ export const Batches: React.FC = () => {
                     <div>
                       <div className="font-bold text-slate-900 text-sm">{selectedWorker.full_name}</div>
                       <div className="text-xs text-slate-500">
-                        Serial: <span className="font-mono font-semibold">{selectedWorker.serial_number}</span> • Village: {selectedWorker.village}
+                        Serial: <span className="font-mono font-semibold">{selectedWorker.serial_number}</span> • Town: {selectedWorker.town || selectedWorker.village}
                       </div>
                     </div>
                   </div>
@@ -814,7 +814,7 @@ export const Batches: React.FC = () => {
                               {w.serial_number}
                             </span>
                             <div className="text-[11px] text-slate-400 mt-0.5">
-                              {w.village}, {w.city} • Phone: {w.phone}
+                              {w.town || w.village}{w.address ? ` • ${w.address}` : ''} • Phone: {w.phone}
                             </div>
                           </div>
                           <div className="text-right">
@@ -1017,7 +1017,7 @@ export const Batches: React.FC = () => {
                             <span className="ml-2 font-mono text-slate-500 text-[11px] bg-slate-100 px-1.5 py-0.5 rounded">
                               {w.serial_number}
                             </span>
-                            <div className="text-[11px] text-slate-400">{w.village}</div>
+                            <div className="text-[11px] text-slate-400">{w.town || w.village}</div>
                           </div>
                           <span className="font-bold text-slate-800">{w.pending_pieces} pcs pending</span>
                         </div>

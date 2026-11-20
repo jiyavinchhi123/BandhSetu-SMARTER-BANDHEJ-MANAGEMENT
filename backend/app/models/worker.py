@@ -12,8 +12,9 @@ class Worker(Base):
     full_name = Column(String(255), index=True, nullable=False)
     phone = Column(String(30), index=True, nullable=False)
     town = Column(String(100), index=True, nullable=False)
-    city = Column(String(100), index=True, nullable=False)
-    village = Column(String(100), index=True, nullable=False)
+    address = Column(Text, nullable=True)
+    city = Column(String(100), index=True, nullable=True, default="")
+    village = Column(String(100), index=True, nullable=True, default="")
     joining_date = Column(Date, default=date.today, nullable=False)
     status = Column(String(20), default="Active", nullable=False)  # "Active", "Inactive"
     remarks = Column(Text, nullable=True)

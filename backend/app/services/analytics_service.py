@@ -246,6 +246,8 @@ class AnalyticsService:
                     or_(
                         func.lower(Worker.full_name).like(q),
                         func.lower(Worker.serial_number).like(q),
+                        func.lower(Worker.town).like(q),
+                        func.lower(Worker.address).like(q),
                         func.lower(Worker.village).like(q),
                     )
                 )
@@ -254,7 +256,7 @@ class AnalyticsService:
             columns = [
                 ReportColumn(key="serial_number", label="Serial No", align="left"),
                 ReportColumn(key="full_name", label="Artisan Name", align="left"),
-                ReportColumn(key="village", label="Village / Town", align="left"),
+                ReportColumn(key="village", label="Town / Location", align="left"),
                 ReportColumn(key="status", label="Status", align="center", format="badge"),
                 ReportColumn(key="pieces_given", label="Given (Debit)", align="right", format="number"),
                 ReportColumn(key="pieces_received", label="Received (Credit)", align="right", format="number"),
@@ -294,7 +296,7 @@ class AnalyticsService:
                     "id": w.id,
                     "serial_number": w.serial_number,
                     "full_name": w.full_name,
-                    "village": f"{w.village}, {w.city}",
+                    "village": w.town or w.village or "Gujarat",
                     "status": w.status,
                     "pieces_given": int(given),
                     "pieces_received": int(received),
@@ -782,7 +784,7 @@ class AnalyticsService:
                 ReportColumn(key="serial_number", label="Serial No", align="left"),
                 ReportColumn(key="full_name", label="Artisan Name", align="left"),
                 ReportColumn(key="phone", label="Phone", align="left"),
-                ReportColumn(key="village", label="Village / Town", align="left"),
+                ReportColumn(key="village", label="Town / Location", align="left"),
                 ReportColumn(key="pending_pieces", label="Active Pieces", align="center", format="number"),
                 ReportColumn(key="payable_balance", label="Payable Balance Due", align="right", format="currency"),
             ]
@@ -793,7 +795,7 @@ class AnalyticsService:
                     "serial_number": w.serial_number,
                     "full_name": w.full_name,
                     "phone": w.phone,
-                    "village": f"{w.village}, {w.city}",
+                    "village": w.town or w.village or "Gujarat",
                     "pending_pieces": w.pending_pieces,
                     "payable_balance": float(w.payable_balance),
                 }

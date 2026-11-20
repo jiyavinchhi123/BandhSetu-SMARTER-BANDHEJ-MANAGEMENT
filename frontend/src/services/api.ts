@@ -63,8 +63,9 @@ export interface WorkerItem {
   full_name: string;
   phone: string;
   town: string;
-  city: string;
-  village: string;
+  address?: string | null;
+  city?: string;
+  village?: string;
   joining_date: string;
   status: string;
   remarks?: string | null;
@@ -453,8 +454,9 @@ export class ApiClient {
     full_name: string;
     phone: string;
     town: string;
-    city: string;
-    village: string;
+    address?: string;
+    city?: string;
+    village?: string;
     joining_date?: string;
     status?: string;
     remarks?: string;

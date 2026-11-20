@@ -29,7 +29,6 @@ export const Workers: React.FC = () => {
   const [searchParams] = useSearchParams();
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('Active');
-  const [selectedVillage, setSelectedVillage] = useState('All');
   const [isLoading, setIsLoading] = useState(true);
 
   // Register Worker Modal state
@@ -43,8 +42,7 @@ export const Workers: React.FC = () => {
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
   const [town, setTown] = useState('');
-  const [city, setCity] = useState('');
-  const [village, setVillage] = useState('');
+  const [address, setAddress] = useState('');
   const [remarks, setRemarks] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -55,7 +53,6 @@ export const Workers: React.FC = () => {
       const data = await api.getWorkers({
         q: searchTerm,
         status: statusFilter,
-        village: selectedVillage === 'All' ? undefined : selectedVillage,
       });
       setWorkers(data);
     } catch (err: any) {
@@ -67,7 +64,7 @@ export const Workers: React.FC = () => {
     } finally {
       setIsLoading(false);
     }
-  }, [searchTerm, statusFilter, selectedVillage, showToast]);
+  }, [searchTerm, statusFilter, showToast]);
 
   useEffect(() => {
     const delayDebounce = setTimeout(() => {
@@ -79,11 +76,11 @@ export const Workers: React.FC = () => {
   // Handle worker registration
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !phone.trim() || !village.trim()) {
+    if (!fullName.trim() || !phone.trim() || !town.trim()) {
       showToast({
         type: 'error',
         title: 'Required Fields Missing',
-        message: 'Full Name, Phone number and Village are mandatory.',
+        message: 'Full Name, Mobile Number and Town are mandatory.',
       });
       return;
     }
@@ -94,8 +91,7 @@ export const Workers: React.FC = () => {
         full_name: fullName.trim(),
         phone: phone.trim(),
         town: town.trim(),
-        city: city.trim(),
-        village: village.trim(),
+        address: address.trim() || undefined,
         status: 'Active',
         remarks: remarks.trim() || undefined,
       });
@@ -109,7 +105,8 @@ export const Workers: React.FC = () => {
       setIsRegisterOpen(false);
       setFullName('');
       setPhone('');
-      setVillage('');
+      setTown('');
+      setAddress('');
       setRemarks('');
       fetchWorkers();
       navigate(`/workers/${created.id}`);
@@ -123,9 +120,6 @@ export const Workers: React.FC = () => {
       setIsSubmitting(false);
     }
   };
-
-  // Extract distinct villages for quick filters
-  const villagesList = Array.from(new Set(workers.map((w) => w.village).filter(Boolean)));
 
   return (
     <div className="space-y-6">
@@ -159,7 +153,7 @@ export const Workers: React.FC = () => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by Full Name (type 'R'), Serial Number (WRK-0001), Mobile, or Village..."
+            placeholder="Search by Full Name (type 'R'), Serial Number (WRK-0001), Mobile, Town, or Address..."
             className="w-full pl-11 pr-4 py-3 bg-slate-50 hover:bg-slate-100/70 focus:bg-white text-sm sm:text-base text-slate-900 placeholder:text-slate-400 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all font-medium"
           />
         </div>
@@ -236,7 +230,8 @@ export const Workers: React.FC = () => {
                   <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-1">
                     <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     <span>
-                      {worker.village}, {worker.town} ({worker.city})
+                      {worker.town || worker.village || 'Gujarat'}
+                      {worker.address ? ` • ${worker.address}` : ''}
                     </span>
                   </p>
                   <p className="text-xs text-slate-400 font-mono mt-0.5 flex items-center gap-1.5">
@@ -316,26 +311,24 @@ export const Workers: React.FC = () => {
                   placeholder="e.g. +91 98250 12345"
                 />
                 <Input
-                  label="Village *"
+                  label="Town *"
                   required
-                  value={village}
-                  onChange={(e) => setVillage(e.target.value)}
-                  placeholder="e.g. Khavda"
-                />
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <Input
-                  label="Town"
                   value={town}
                   onChange={(e) => setTown(e.target.value)}
                   placeholder="e.g. Anjar"
                 />
-                <Input
-                  label="City / District"
-                  value={city}
-                  onChange={(e) => setCity(e.target.value)}
-                  placeholder="e.g. Bhuj"
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-medium text-slate-700">
+                  Address
+                </label>
+                <textarea
+                  rows={2}
+                  value={address}
+                  onChange={(e) => setAddress(e.target.value)}
+                  placeholder="e.g. Near Khatri Chowk, Main Bazaar, Bhuj"
+                  className="w-full rounded-xl border border-slate-300 p-3 text-xs sm:text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
                 />
               </div>
 

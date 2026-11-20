@@ -7,8 +7,9 @@ class WorkerBase(BaseModel):
     full_name: str = Field(..., min_length=2, description="Worker's Full Name", json_schema_extra={"example": "Kamlaben Vaghela"})
     phone: str = Field(..., min_length=10, description="Mobile Number", json_schema_extra={"example": "+91 98250 12345"})
     town: str = Field(..., min_length=2, json_schema_extra={"example": "Anjar"})
-    city: str = Field(..., min_length=2, json_schema_extra={"example": "Bhuj"})
-    village: str = Field(..., min_length=2, json_schema_extra={"example": "Khavda"})
+    address: Optional[str] = Field(default=None, json_schema_extra={"example": "Near Khatri Chowk"})
+    city: Optional[str] = Field(default="", json_schema_extra={"example": "Bhuj"})
+    village: Optional[str] = Field(default="", json_schema_extra={"example": "Khavda"})
     joining_date: Optional[date] = Field(default_factory=date.today)
     status: str = Field(default="Active", json_schema_extra={"example": "Active"})
     remarks: Optional[str] = Field(default=None, json_schema_extra={"example": "Specializes in fine Shikari motifs"})
@@ -22,6 +23,7 @@ class WorkerUpdate(BaseModel):
     full_name: Optional[str] = None
     phone: Optional[str] = None
     town: Optional[str] = None
+    address: Optional[str] = None
     city: Optional[str] = None
     village: Optional[str] = None
     status: Optional[str] = None

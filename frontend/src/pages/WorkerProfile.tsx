@@ -86,9 +86,8 @@ export const WorkerProfile: React.FC = () => {
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [editName, setEditName] = useState('');
   const [editPhone, setEditPhone] = useState('');
-  const [editVillage, setEditVillage] = useState('');
   const [editTown, setEditTown] = useState('');
-  const [editCity, setEditCity] = useState('');
+  const [editAddress, setEditAddress] = useState('');
   const [editStatus, setEditStatus] = useState('Active');
   const [editRemarks, setEditRemarks] = useState('');
 
@@ -112,9 +111,8 @@ export const WorkerProfile: React.FC = () => {
       // Seed edit form
       setEditName(w.full_name);
       setEditPhone(w.phone);
-      setEditVillage(w.village);
       setEditTown(w.town);
-      setEditCity(w.city);
+      setEditAddress(w.address || '');
       setEditStatus(w.status);
       setEditRemarks(w.remarks || '');
     } catch (err: any) {
@@ -217,13 +215,12 @@ export const WorkerProfile: React.FC = () => {
     e.preventDefault();
     try {
       const updated = await api.updateWorker(workerId, {
-        full_name: editName,
-        phone: editPhone,
-        village: editVillage,
-        town: editTown,
-        city: editCity,
+        full_name: editName.trim(),
+        phone: editPhone.trim(),
+        town: editTown.trim(),
+        address: editAddress.trim() || undefined,
         status: editStatus,
-        remarks: editRemarks,
+        remarks: editRemarks.trim() || undefined,
       });
       setWorker(updated);
       showToast({ type: 'success', title: 'Profile Updated', message: 'Details updated successfully.' });
@@ -284,7 +281,8 @@ export const WorkerProfile: React.FC = () => {
                 </span>
                 <span className="flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                  {worker.village}, {worker.town} ({worker.city})
+                  {worker.town || worker.village || 'Gujarat'}
+                  {worker.address ? ` • ${worker.address}` : ''}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5 text-slate-400" />
@@ -689,12 +687,12 @@ export const WorkerProfile: React.FC = () => {
               <p className="font-mono font-bold text-slate-800 mt-0.5">{worker.phone}</p>
             </div>
             <div>
-              <p className="text-slate-400 font-semibold">Village / Locality</p>
-              <p className="font-bold text-slate-800 mt-0.5">{worker.village}</p>
+              <p className="text-slate-400 font-semibold">Town</p>
+              <p className="font-bold text-slate-800 mt-0.5">{worker.town}</p>
             </div>
             <div>
-              <p className="text-slate-400 font-semibold">Town & District</p>
-              <p className="font-bold text-slate-800 mt-0.5">{worker.town}, {worker.city}</p>
+              <p className="text-slate-400 font-semibold">Address</p>
+              <p className="font-bold text-slate-800 mt-0.5">{worker.address || '—'}</p>
             </div>
             <div className="col-span-2">
               <p className="text-slate-400 font-semibold">Remarks & Craft Specialization</p>
@@ -906,35 +904,34 @@ export const WorkerProfile: React.FC = () => {
             <h3 className="text-lg font-bold text-slate-900">Edit Artisan Information</h3>
             <form onSubmit={handleUpdateProfile} className="space-y-3">
               <Input
-                label="Full Name"
+                label="Full Name *"
                 required
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
               />
               <div className="grid grid-cols-2 gap-3">
                 <Input
-                  label="Mobile Number"
+                  label="Mobile Number *"
                   required
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
                 />
                 <Input
-                  label="Village"
+                  label="Town *"
                   required
-                  value={editVillage}
-                  onChange={(e) => setEditVillage(e.target.value)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <Input
-                  label="Town"
                   value={editTown}
                   onChange={(e) => setEditTown(e.target.value)}
                 />
-                <Input
-                  label="City"
-                  value={editCity}
-                  onChange={(e) => setEditCity(e.target.value)}
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-xs font-semibold text-slate-700">Address</label>
+                <textarea
+                  rows={2}
+                  value={editAddress}
+                  onChange={(e) => setEditAddress(e.target.value)}
+                  placeholder="e.g. Near Khatri Chowk, Main Bazaar, Bhuj"
+                  className="w-full rounded-xl border border-slate-300 p-2.5 text-xs sm:text-sm"
                 />
               </div>
 
@@ -951,11 +948,12 @@ export const WorkerProfile: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700">Remarks</label>
+                <label className="block text-xs font-semibold text-slate-700">Specialization / Remarks</label>
                 <textarea
                   rows={2}
                   value={editRemarks}
                   onChange={(e) => setEditRemarks(e.target.value)}
+                  placeholder="e.g. Expert in fine Shikari work, prefers Gajji Silk sarees..."
                   className="w-full rounded-xl border border-slate-300 p-2.5 text-xs sm:text-sm"
                 />
               </div>
