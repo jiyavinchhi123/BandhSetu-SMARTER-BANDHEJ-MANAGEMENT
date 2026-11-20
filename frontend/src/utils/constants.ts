@@ -1,10 +1,10 @@
-export const APP_NAME = "Bandhej Enterprise";
-export const APP_TAGLINE = "Artisan Worker & Production Operations";
+export const APP_NAME = "BandhSetu";
+export const APP_TAGLINE = "Smarter Bandhej Management";
 
 export const NAVIGATION_ITEMS = [
   { name: 'Dashboard', path: '/', icon: 'LayoutDashboard' },
-  { name: 'Artisan Workers', path: '/workers', icon: 'Users', badge: '384' },
-  { name: 'Work Batches', path: '/batches', icon: 'Layers', badge: '42' },
+  { name: 'Artisan Workers', path: '/workers', icon: 'Users' },
+  { name: 'Work Batches', path: '/batches', icon: 'Layers' },
   { name: 'Payments & Wages', path: '/payments', icon: 'IndianRupee' },
   { name: 'Raw Material', path: '/inventory', icon: 'Package' },
   { name: 'Settings', path: '/settings', icon: 'Settings' },

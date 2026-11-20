@@ -20,26 +20,33 @@ interface SidebarProps {
   className?: string;
 }
 
+interface NavItem {
+  name: string;
+  path: string;
+  icon: React.ComponentType<{ className?: string }>;
+  badge?: string;
+}
+
 export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   const { user, role, logout } = useAuth();
 
-  const baseNavItems = [
+  const baseNavItems: NavItem[] = [
     { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { name: 'Artisan Workers', path: '/workers', icon: Users, badge: '384' },
+    { name: 'Artisan Workers', path: '/workers', icon: Users },
     { name: 'Item Catalogue', path: '/items', icon: Tag },
-    { name: 'Work Batches', path: '/batches', icon: Layers, badge: '42' },
+    { name: 'Work Batches', path: '/batches', icon: Layers },
     { name: 'Wages & Payouts', path: '/payments', icon: IndianRupee },
     { name: 'Reports & Analytics', path: '/reports', icon: BarChart3 },
     { name: 'Fabric Inventory', path: '/inventory', icon: Package },
   ];
 
   // Admin exclusive navigation
-  const adminNavItems = [
-    { name: 'Manager Access', path: '/managers', icon: ShieldAlert, badge: 'Control' },
+  const adminNavItems: NavItem[] = [
+    { name: 'Manager Access', path: '/managers', icon: ShieldAlert },
     { name: 'Settings', path: '/settings', icon: Settings },
   ];
 
-  const visibleNavItems =
+  const visibleNavItems: NavItem[] =
     role === 'admin'
       ? [...baseNavItems, ...adminNavItems]
       : [...baseNavItems, { name: 'Settings', path: '/settings', icon: Settings }];

@@ -42,8 +42,8 @@ export const Workers: React.FC = () => {
   }, [searchParams]);
   const [fullName, setFullName] = useState('');
   const [phone, setPhone] = useState('');
-  const [town, setTown] = useState('Bhuj');
-  const [city, setCity] = useState('Bhuj');
+  const [town, setTown] = useState('');
+  const [city, setCity] = useState('');
   const [village, setVillage] = useState('');
   const [remarks, setRemarks] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);

@@ -79,7 +79,7 @@ export const Batches: React.FC = () => {
   const [workerOptions, setWorkerOptions] = useState<WorkerItem[]>([]);
   const [isSearchingWorker, setIsSearchingWorker] = useState(false);
   const [selectedItem, setSelectedItem] = useState<ItemCatalogue | null>(null);
-  const [quantityIssued, setQuantityIssued] = useState<number | ''>(10);
+  const [quantityIssued, setQuantityIssued] = useState<number | ''>('');
   const [knotStyle, setKnotStyle] = useState('Bharti (Dense Round Knots)');
   const [dueDate, setDueDate] = useState(() => {
     const d = new Date();

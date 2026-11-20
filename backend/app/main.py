@@ -62,37 +62,9 @@ def init_db_and_seed():
             )
             db.add(manager)
 
-        # 3. Item Catalogue
-        item_count = db.query(Item).count()
-        if item_count == 0:
-            logger.info("Seeding Item Catalogue...")
-            sample_items = [
-                Item(item_name="Pure Gajji Silk Saree - Bharti Knot", item_code="GAJ-BHR-01", price_per_piece=220.0, description="Heavy Gajji silk, dense traditional Bharti knotting", is_active=True),
-                Item(item_name="Pure Georgette Saree - Ekdali Knot", item_code="GEO-EKD-01", price_per_piece=160.0, description="Lightweight 60g Georgette with fine single-dot knotting", is_active=True),
-                Item(item_name="Modal Silk Dupatta - Shikari Work", item_code="MOD-SHK-02", price_per_piece=280.0, description="2.5m Modal silk with elephant & peacock Shikari motifs", is_active=True),
-                Item(item_name="Cotton Bandhani Dress Material", item_code="COT-BDH-03", price_per_piece=130.0, description="Fine Mulmul cotton 3-piece suit fabric", is_active=True),
-                Item(item_name="Chiffon Saree - Jaal All-Over", item_code="CHF-JAL-04", price_per_piece=350.0, description="Intricate all-over diamond jaal grid work", is_active=True),
-                Item(item_name="Red Bridal Bandhej Gharchola", item_code="GHR-BRD-05", price_per_piece=480.0, description="Traditional auspicious wedding Gharchola with zari checks", is_active=True),
-            ]
-            db.add_all(sample_items)
-
-        # 4. Workers
-        worker_count = db.query(Worker).count()
-        if worker_count == 0:
-            logger.info("Seeding initial Artisan Workers...")
-            sample_workers = [
-                Worker(serial_number="WRK-0001", full_name="Kamlaben Vaghela", phone="+91 98250 12345", town="Anjar", city="Bhuj", village="Khavda", joining_date=date(2025, 4, 15), status="Active", remarks="Master artisan; expert in fine Shikari and Gharchola work", pending_pieces=45, payable_balance=9900.0, total_earned=48500.0),
-                Worker(serial_number="WRK-0002", full_name="Santoshben Parmar", phone="+91 94280 67890", town="Mandvi", city="Bhuj", village="Madhapar", joining_date=date(2025, 6, 1), status="Active", remarks="Fast tyer; handles high volume Georgette Ekdali", pending_pieces=30, payable_balance=4800.0, total_earned=32000.0),
-                Worker(serial_number="WRK-0003", full_name="Meenaben Solanki", phone="+91 99790 54321", town="Jamnagar Rural", city="Jamnagar", village="Dhamadka", joining_date=date(2025, 2, 10), status="Active", remarks="Specialist in intricate all-over Jaal work", pending_pieces=15, payable_balance=5250.0, total_earned=56000.0),
-                Worker(serial_number="WRK-0004", full_name="Rekhaben Rathod", phone="+91 97120 98765", town="Mundra", city="Bhuj", village="Mundra", joining_date=date(2025, 8, 20), status="Active", remarks="Gajji silk specialist", pending_pieces=20, payable_balance=4400.0, total_earned=19800.0),
-                Worker(serial_number="WRK-0005", full_name="Ranjanben Jadeja", phone="+91 98980 11223", town="Bhuj", city="Bhuj", village="Khavda", joining_date=date(2025, 9, 5), status="Active", remarks="Consistent tying tension and clean dot work", pending_pieces=25, payable_balance=5500.0, total_earned=22400.0),
-                Worker(serial_number="WRK-0006", full_name="Rupalben Chauhan", phone="+91 94090 33445", town="Anjar", city="Gandhidham", village="Varsamedi", joining_date=date(2025, 11, 1), status="Active", remarks="New artisan in Varsamedi cluster", pending_pieces=10, payable_balance=1600.0, total_earned=6800.0),
-            ]
-            db.add_all(sample_workers)
-
         db.commit()
     except Exception as e:
-        logger.error(f"Error seeding initial accounts and catalog: {e}")
+        logger.error(f"Error seeding initial accounts: {e}")
         db.rollback()
     finally:
         db.close()

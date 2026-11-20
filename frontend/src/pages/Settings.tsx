@@ -18,10 +18,10 @@ export const Settings: React.FC = () => {
           Business & Regional Localization
         </h3>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <Input label="Business Name" defaultValue="Kutch Heritage Bandhej Udyog" />
+          <Input label="Business Name" placeholder="Enter Business Name" defaultValue="" />
           <Input label="Default Currency" defaultValue="INR (₹)" disabled />
           <Input label="Timezone" defaultValue="Asia/Kolkata (IST)" disabled />
-          <Input label="Allowed Fabric Wastage (%)" defaultValue="3.0" type="number" step="0.1" />
+          <Input label="Allowed Fabric Wastage (%)" placeholder="0.0" defaultValue="" type="number" step="0.1" />
         </div>
         <div className="pt-2 flex justify-end">
           <Button variant="primary" icon={<Save className="w-4 h-4" />}>

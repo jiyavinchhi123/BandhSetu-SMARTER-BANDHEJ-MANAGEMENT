@@ -42,7 +42,7 @@ export const Payments: React.FC = () => {
   const [advWorkerSearch, setAdvWorkerSearch] = useState('');
   const [advWorkerOptions, setAdvWorkerOptions] = useState<WorkerItem[]>([]);
   const [selectedAdvWorker, setSelectedAdvWorker] = useState<WorkerItem | null>(null);
-  const [advAmount, setAdvAmount] = useState<number | ''>(500);
+  const [advAmount, setAdvAmount] = useState<number | ''>('');
   const [advMode, setAdvMode] = useState('Cash');
   const [advRefNo, setAdvRefNo] = useState('');
   const [advDate, setAdvDate] = useState(() => new Date().toISOString().split('T')[0]);
