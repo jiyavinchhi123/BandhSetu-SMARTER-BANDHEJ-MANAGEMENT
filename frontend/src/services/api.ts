@@ -901,6 +901,70 @@ export class ApiClient {
 
     return `${this.baseUrl}/analytics/reports/csv?${query.toString()}`;
   }
+
+  async getPendingWorkReport(params: PendingWorkFilterParams = {}): Promise<PendingWorkReportResponse> {
+    const query = new URLSearchParams();
+    if (params.date_preset) query.set('date_preset', params.date_preset);
+    if (params.start_date) query.set('start_date', params.start_date);
+    if (params.end_date) query.set('end_date', params.end_date);
+    if (params.q) query.set('q', params.q);
+    if (params.town) query.set('town', params.town);
+    if (params.item_name) query.set('item_name', params.item_name);
+
+    const response = await fetch(`${this.baseUrl}/analytics/pending-work-report?${query.toString()}`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to load artisan pending work report');
+    }
+    return await response.json();
+  }
+
+  getPendingWorkReportCsvUrl(params: PendingWorkFilterParams = {}): string {
+    const query = new URLSearchParams();
+    if (params.date_preset) query.set('date_preset', params.date_preset);
+    if (params.start_date) query.set('start_date', params.start_date);
+    if (params.end_date) query.set('end_date', params.end_date);
+    if (params.q) query.set('q', params.q);
+    if (params.town) query.set('town', params.town);
+    if (params.item_name) query.set('item_name', params.item_name);
+
+    const token = localStorage.getItem('token');
+    if (token) query.set('token', token);
+
+    return `${this.baseUrl}/analytics/pending-work-report/csv?${query.toString()}`;
+  }
+
+  async downloadPendingWorkReportCsv(params: PendingWorkFilterParams = {}): Promise<void> {
+    const query = new URLSearchParams();
+    if (params.date_preset) query.set('date_preset', params.date_preset);
+    if (params.start_date) query.set('start_date', params.start_date);
+    if (params.end_date) query.set('end_date', params.end_date);
+    if (params.q) query.set('q', params.q);
+    if (params.town) query.set('town', params.town);
+    if (params.item_name) query.set('item_name', params.item_name);
+
+    const response = await fetch(`${this.baseUrl}/analytics/pending-work-report/csv?${query.toString()}`, {
+      headers: this.getAuthHeaders(),
+    });
+
+    if (!response.ok) {
+      throw new Error(`CSV download failed with status ${response.status}`);
+    }
+
+    const blob = await response.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const todayStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    a.download = `bandhsetu_pending_work_${todayStr}.csv`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => {
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    }, 100);
+  }
 }
 
 // --- STEP 6: ANALYTICS & REPORTING INTERFACES ---
@@ -965,6 +1029,69 @@ export interface ReportFilterParams {
   worker_id?: number;
   item_id?: number;
   search_query?: string;
+}
+
+// --- ARTISAN PENDING WORK & NON-SUBMISSION REPORT INTERFACES ---
+export interface PendingWorkDistributionItem {
+  distribution_id: number;
+  batch_code: string;
+  worker_id: number;
+  artisan_name: string;
+  serial_number: string;
+  town: string;
+  phone: string;
+  issue_date: string;
+  item_name: string;
+  knot_style?: string | null;
+  rate_per_piece: number;
+  given_pcs: number;
+  received_pcs: number;
+  rejected_pcs: number;
+  remaining_pcs: number;
+  days_pending: number;
+  is_zero_return: boolean;
+}
+
+export interface ArtisanPendingGroup {
+  worker_id: number;
+  artisan_name: string;
+  serial_number: string;
+  town: string;
+  phone: string;
+  total_given: number;
+  total_received: number;
+  total_rejected: number;
+  total_pending: number;
+  is_zero_submission: boolean;
+  distributions: PendingWorkDistributionItem[];
+}
+
+export interface PendingWorkSummary {
+  total_artisans_with_pending: number;
+  total_pieces_given: number;
+  total_pieces_received: number;
+  total_pieces_pending: number;
+  artisans_zero_submissions: number;
+}
+
+export interface PendingWorkReportResponse {
+  start_date: string;
+  end_date: string;
+  date_preset?: string | null;
+  summary: PendingWorkSummary;
+  distributions: PendingWorkDistributionItem[];
+  artisan_groups: ArtisanPendingGroup[];
+  available_towns: string[];
+  available_designs: string[];
+}
+
+export interface PendingWorkFilterParams {
+  start_date?: string;
+  end_date?: string;
+  date_preset?: string;
+  q?: string;
+  town?: string;
+  item_name?: string;
 }
 
 export const api = new ApiClient();

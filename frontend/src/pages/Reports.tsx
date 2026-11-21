@@ -1,601 +1,772 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
-  BarChart3,
-  Download,
-  Printer,
   Calendar,
   Search,
   Filter,
+  Download,
+  Printer,
   RefreshCw,
-  FileSpreadsheet,
   Users,
-  Package,
-  IndianRupee,
   AlertCircle,
-  CheckCircle2,
+  Clock,
+  ExternalLink,
   ChevronDown,
   Layers,
-  ArrowUpRight,
-  ArrowDownLeft,
-  Coins,
-  Wallet,
-  Clock,
   Sparkles,
-  FileText,
+  CheckCircle2,
+  FileSpreadsheet,
+  Phone,
+  MapPin,
+  Tag,
 } from 'lucide-react';
 import {
   api,
-  ReportResponse,
-  ReportColumn,
-  ReportFilterParams,
+  PendingWorkReportResponse,
+  PendingWorkDistributionItem,
+  ArtisanPendingGroup,
 } from '../services/api';
-import { Button, Card, Badge, LoadingSpinner, EmptyState } from '../components/ui';
-import { formatINR, formatIndianDate } from '../utils/formatters';
+import { formatIndianDate } from '../utils/formatters';
 import { useToast } from '../context/ToastContext';
+import { useLanguage } from '../context/LanguageContext';
+import { translateEntityName } from '../utils/translations';
 
-interface ReportTabConfig {
-  id: string;
-  name: string;
-  shortName: string;
-  category: 'operational' | 'financial' | 'summary';
-  icon: React.ComponentType<{ className?: string }>;
-  description: string;
-}
-
-const REPORT_TABS: ReportTabConfig[] = [
-  {
-    id: 'worker-wise',
-    name: 'Worker-Wise Business Report',
-    shortName: 'Artisans',
-    category: 'summary',
-    icon: Users,
-    description: 'Comprehensive breakdown of pieces issued, returned, wages, and balances per artisan.',
-  },
-  {
-    id: 'item-wise',
-    name: 'Item Design Performance',
-    shortName: 'Item Catalogue',
-    category: 'operational',
-    icon: Layers,
-    description: 'Production velocity, tying costs, and completion volume grouped by fabric item.',
-  },
-  {
-    id: 'daily-distribution',
-    name: 'Daily Work Distribution',
-    shortName: 'Distributions',
-    category: 'operational',
-    icon: ArrowUpRight,
-    description: 'Daily consignment dispatches, artisan assignments, and material debit log.',
-  },
-  {
-    id: 'daily-returns',
-    name: 'Daily Returns & Quality QC',
-    shortName: 'Returns & QC',
-    category: 'operational',
-    icon: ArrowDownLeft,
-    description: 'Daily accepted tying pieces, rejected pieces, and earned wage credits.',
-  },
-  {
-    id: 'pending-work',
-    name: 'Active Pending Work Consignments',
-    shortName: 'Pending Work',
-    category: 'operational',
-    icon: Clock,
-    description: 'Pieces currently in artisan custody, snapshot piece rates, and overdue flags.',
-  },
-  {
-    id: 'daily-wages',
-    name: 'Daily Wages Earned',
-    shortName: 'Daily Wages',
-    category: 'financial',
-    icon: Sparkles,
-    description: 'Daily verified tying wage accruals created from accepted piece returns.',
-  },
-  {
-    id: 'advances',
-    name: 'Advances & Cash Withdrawals',
-    shortName: 'Advances',
-    category: 'financial',
-    icon: Coins,
-    description: 'All cash and UPI advance debits with approval references and remarks.',
-  },
-  {
-    id: 'payments',
-    name: 'Wage Payouts & Disbursements',
-    shortName: 'Payouts',
-    category: 'financial',
-    icon: Wallet,
-    description: 'Official wage settlements and payment register by payment mode.',
-  },
-  {
-    id: 'outstanding-balances',
-    name: 'Outstanding Worker Balances',
-    shortName: 'Balances',
-    category: 'financial',
-    icon: IndianRupee,
-    description: 'Artisans with net payable balances pending settlement.',
-  },
-  {
-    id: 'monthly-summary',
-    name: 'Monthly Business Summary',
-    shortName: 'Monthly P&L',
-    category: 'summary',
-    icon: FileText,
-    description: 'Month-by-month high level rollup of fabric pieces, wages, and payouts.',
-  },
-];
+type DatePreset = 'this_month' | 'prev_month' | 'last_30_days' | 'all_time' | 'custom';
+type ViewMode = 'detailed' | 'grouped';
+type SortField = 'date_asc' | 'date_desc' | 'pending_desc' | 'name_asc';
 
 export const Reports: React.FC = () => {
   const { showToast } = useToast();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const { t, language } = useLanguage();
 
-  // Active Report Tab
-  const initialTab = searchParams.get('tab') || 'worker-wise';
-  const [activeTab, setActiveTab] = useState<string>(initialTab);
+  // Search & Filter State
+  const [datePreset, setDatePreset] = useState<DatePreset>('this_month');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedTown, setSelectedTown] = useState('');
+  const [selectedDesign, setSelectedDesign] = useState('');
+  const [viewMode, setViewMode] = useState<ViewMode>('detailed');
+  const [sortField, setSortField] = useState<SortField>('date_asc');
 
-  // Filters State
-  const [datePreset, setDatePreset] = useState<string>('this_month');
-  const [startDate, setStartDate] = useState<string>('');
-  const [endDate, setEndDate] = useState<string>('');
-  const [searchQuery, setSearchQuery] = useState<string>('');
-  const [debouncedSearch, setDebouncedSearch] = useState<string>('');
+  // Report Data & Loading State
+  const [reportData, setReportData] = useState<PendingWorkReportResponse | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
-  // Report Data State
-  const [reportData, setReportData] = useState<ReportResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isExporting, setIsExporting] = useState(false);
-
-  // Sync tab with URL search parameter
+  // Initialize dates to current month up to today on mount
   useEffect(() => {
-    const tabParam = searchParams.get('tab');
-    if (tabParam && REPORT_TABS.some((t) => t.id === tabParam) && tabParam !== activeTab) {
-      setActiveTab(tabParam);
-    }
-  }, [searchParams, activeTab]);
+    const today = new Date();
+    const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
 
-  const handleSelectTab = (tabId: string) => {
-    setActiveTab(tabId);
-    setSearchParams({ tab: tabId });
-  };
-
-  // Search debounce
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery);
-    }, 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
+    const fmt = (d: Date) => d.toISOString().split('T')[0];
+    setStartDate(fmt(firstDay));
+    setEndDate(fmt(today));
+  }, []);
 
   // Fetch report data
-  const fetchReport = useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const params: ReportFilterParams = {
-        report_type: activeTab,
-        date_preset: datePreset !== 'all' ? datePreset : undefined,
-        start_date: datePreset === 'custom' && startDate ? startDate : undefined,
-        end_date: datePreset === 'custom' && endDate ? endDate : undefined,
-        search_query: debouncedSearch.trim() || undefined,
-      };
+  const fetchReport = useCallback(
+    async (isManualRefresh = false) => {
+      try {
+        if (isManualRefresh) setRefreshing(true);
+        else setLoading(true);
 
-      const data = await api.getReportData(params);
-      setReportData(data);
-    } catch (err: any) {
-      showToast({
-        type: 'error',
-        title: 'Error Loading Report',
-        message: err.message || 'Could not fetch report data.',
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [activeTab, datePreset, startDate, endDate, debouncedSearch, showToast]);
+        const params: any = {
+          date_preset: datePreset,
+          q: searchQuery.trim() || undefined,
+          town: selectedTown || undefined,
+          item_name: selectedDesign || undefined,
+        };
+
+        if (datePreset === 'custom') {
+          if (startDate) params.start_date = startDate;
+          if (endDate) params.end_date = endDate;
+        }
+
+        const res = await api.getPendingWorkReport(params);
+        setReportData(res);
+
+        // Keep start & end date inputs synced with backend resolved dates if preset
+        if (datePreset !== 'custom') {
+          setStartDate(res.start_date);
+          setEndDate(res.end_date);
+        }
+      } catch (err: any) {
+        showToast({
+          type: 'error',
+          title: 'Report Load Failed',
+          message: err.message || 'Could not load pending work report',
+        });
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [datePreset, startDate, endDate, searchQuery, selectedTown, selectedDesign, showToast]
+  );
 
   useEffect(() => {
     fetchReport();
   }, [fetchReport]);
 
-  // Handle CSV Download
-  const handleDownloadCsv = () => {
-    const params: ReportFilterParams = {
-      report_type: activeTab,
-      date_preset: datePreset !== 'all' ? datePreset : undefined,
-      start_date: datePreset === 'custom' && startDate ? startDate : undefined,
-      end_date: datePreset === 'custom' && endDate ? endDate : undefined,
-      search_query: debouncedSearch.trim() || undefined,
-    };
-    const downloadUrl = api.getReportCsvUrl(params);
-    window.open(downloadUrl, '_blank');
-    showToast({
-      type: 'success',
-      title: 'Export Started',
-      message: 'Downloading spreadsheet file...',
-    });
+  // Handle Preset Quick Click
+  const handlePresetSelect = (preset: DatePreset) => {
+    setDatePreset(preset);
+    const today = new Date();
+    const fmt = (d: Date) => d.toISOString().split('T')[0];
+
+    if (preset === 'this_month') {
+      const first = new Date(today.getFullYear(), today.getMonth(), 1);
+      setStartDate(fmt(first));
+      setEndDate(fmt(today));
+    } else if (preset === 'prev_month') {
+      const first = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+      const last = new Date(today.getFullYear(), today.getMonth(), 0);
+      setStartDate(fmt(first));
+      setEndDate(fmt(last));
+    } else if (preset === 'last_30_days') {
+      const past = new Date();
+      past.setDate(today.getDate() - 30);
+      setStartDate(fmt(past));
+      setEndDate(fmt(today));
+    } else if (preset === 'all_time') {
+      setStartDate('2020-01-01');
+      setEndDate(fmt(today));
+    }
   };
 
-  // Handle Print Dialog
+  // Sorted distributions list
+  const sortedDistributions = useMemo(() => {
+    if (!reportData) return [];
+    const list = [...reportData.distributions];
+
+    switch (sortField) {
+      case 'date_asc':
+        return list.sort((a, b) => a.issue_date.localeCompare(b.issue_date));
+      case 'date_desc':
+        return list.sort((a, b) => b.issue_date.localeCompare(a.issue_date));
+      case 'pending_desc':
+        return list.sort((a, b) => b.remaining_pcs - a.remaining_pcs);
+      case 'name_asc':
+        return list.sort((a, b) => a.artisan_name.localeCompare(b.artisan_name));
+      default:
+        return list;
+    }
+  }, [reportData, sortField]);
+
+  // Trigger Print
   const handlePrint = () => {
     window.print();
   };
 
-  // Format cell values
-  const renderCellValue = (val: any, format?: string) => {
-    if (val === null || val === undefined || val === '') return '—';
+  // Client-side CSV generator fallback (contains ONLY the 6 columns and rows)
+  const generateClientCsv = (data: PendingWorkReportResponse) => {
+    const rows = [
+      [
+        'Date',
+        'Serial No.',
+        'Artisan Name',
+        'Town',
+        'Remaining Pcs',
+        'Name of Design',
+      ],
+      ...data.distributions.map((d) => [
+        `"${formatIndianDate(d.issue_date)}"`,
+        `"${d.serial_number}"`,
+        `"${d.artisan_name.replace(/"/g, '""')}"`,
+        `"${d.town}"`,
+        d.remaining_pcs,
+        `"${d.item_name.replace(/"/g, '""')}"`,
+      ]),
+    ];
 
-    if (format === 'currency') {
-      const num = typeof val === 'number' ? val : parseFloat(val);
-      if (isNaN(num)) return '₹0.00';
-      return formatINR(num);
-    }
-
-    if (format === 'number') {
-      const num = typeof val === 'number' ? val : parseInt(val, 10);
-      return isNaN(num) ? '0' : num.toLocaleString('en-IN');
-    }
-
-    if (format === 'date') {
-      return formatIndianDate(String(val));
-    }
-
-    if (format === 'badge') {
-      const str = String(val);
-      let variant: 'default' | 'success' | 'warning' | 'danger' | 'info' = 'default';
-      if (str === 'Active' || str === 'Settled' || str === 'Completed') variant = 'success';
-      if (str === 'In Progress' || str === 'Issued' || str === 'OVERDUE') variant = 'warning';
-      if (str === 'Inactive' || str === 'Reversed') variant = 'danger';
-
-      return (
-        <span
-          className={`inline-block px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-            variant === 'success'
-              ? 'bg-emerald-100 text-emerald-800'
-              : variant === 'warning'
-              ? 'bg-amber-100 text-amber-800'
-              : variant === 'danger'
-              ? 'bg-rose-100 text-rose-800'
-              : 'bg-gray-100 text-gray-800'
-          }`}
-        >
-          {str}
-        </span>
-      );
-    }
-
-    return String(val);
+    const csvContent = rows.map((e) => e.join(',')).join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.setAttribute('href', url);
+    const todayStr = new Date().toISOString().split('T')[0].replace(/-/g, '');
+    link.setAttribute('download', `bandhsetu_pending_work_${todayStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    setTimeout(() => {
+      URL.revokeObjectURL(url);
+      document.body.removeChild(link);
+    }, 100);
   };
 
-  const currentTabConfig = REPORT_TABS.find((t) => t.id === activeTab) || REPORT_TABS[0];
-  const TabIcon = currentTabConfig.icon;
+  // Trigger CSV Export
+  const handleExportCsv = async () => {
+    try {
+      setExporting(true);
+      const params: any = {
+        date_preset: datePreset,
+        q: searchQuery.trim() || undefined,
+        town: selectedTown || undefined,
+        item_name: selectedDesign || undefined,
+      };
+      if (datePreset === 'custom') {
+        if (startDate) params.start_date = startDate;
+        if (endDate) params.end_date = endDate;
+      }
+
+      await api.downloadPendingWorkReportCsv(params);
+      showToast({
+        type: 'success',
+        title: 'Export Downloaded',
+        message: 'Pending work report has been exported to CSV.',
+      });
+    } catch (err: any) {
+      if (reportData && reportData.distributions.length > 0) {
+        generateClientCsv(reportData);
+        showToast({
+          type: 'success',
+          title: 'Export Downloaded',
+          message: 'Exported CSV from current report view.',
+        });
+      } else {
+        showToast({
+          type: 'error',
+          title: 'Export Failed',
+          message: err.message || 'Failed to download CSV export',
+        });
+      }
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const summary = reportData?.summary;
 
   return (
-    <div className="space-y-6 pb-16">
+    <div className="space-y-6 pb-20 md:pb-6 print:p-0 print:m-0 print:space-y-4">
       {/* ------------------------------------------------------------- */}
-      {/* 1. HEADER & ACTION TOOLBAR (Hidden during print) */}
+      {/* 1. REPORT HEADER */}
       {/* ------------------------------------------------------------- */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 print:hidden">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
         <div>
-          <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-100 text-emerald-800">
-              Business Intelligence & Audits
-            </span>
-            <span className="text-xs text-gray-500">10 Report Sections</span>
-          </div>
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight flex items-center gap-2.5">
-            <BarChart3 className="w-7 h-7 text-emerald-700" />
-            Reports & Business Analytics
+          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            {t('reports_analytics', 'Reports & Analytics')}
           </h1>
-          <p className="text-sm text-gray-600 mt-0.5">
-            Real-time material debit-credit tracking, artisan wage balances, quality control, and executive summaries.
-          </p>
         </div>
 
-        {/* Global Action Buttons */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={fetchReport}
-            disabled={isLoading}
-            className="text-xs font-semibold min-h-[44px]"
-            title="Refresh current report"
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          <button
+            onClick={() => fetchReport(true)}
+            disabled={refreshing}
+            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 shadow-sm transition-all active:scale-95 disabled:opacity-50"
+            title="Refresh Report Data"
           >
-            <RefreshCw className={`w-4 h-4 mr-1.5 ${isLoading ? 'animate-spin' : ''}`} />
-            Refresh
-          </Button>
+            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${refreshing ? 'animate-spin' : ''}`} />
+            <span>{t('refresh', 'Refresh')}</span>
+          </button>
 
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleDownloadCsv}
-            disabled={isLoading || !reportData || reportData.total_records === 0}
-            className="text-xs font-semibold bg-emerald-50 text-emerald-800 border-emerald-300 hover:bg-emerald-100 min-h-[44px]"
-            title="Download CSV for Excel"
+          <button
+            onClick={handleExportCsv}
+            disabled={exporting}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 rounded-xl border border-emerald-200 shadow-sm transition-all active:scale-95 disabled:opacity-60"
+            title="Export to CSV / Excel"
           >
-            <FileSpreadsheet className="w-4 h-4 mr-1.5 text-emerald-700" />
-            Export Excel / CSV
-          </Button>
+            <FileSpreadsheet className={`w-4 h-4 text-emerald-600 ${exporting ? 'animate-pulse' : ''}`} />
+            <span>{exporting ? 'Exporting...' : t('export_excel_csv', 'Export Excel/CSV')}</span>
+          </button>
 
-          <Button
-            variant="primary"
-            size="sm"
+          <button
             onClick={handlePrint}
-            className="text-xs font-semibold min-h-[44px]"
-            title="Print or Save as PDF"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-sm transition-all active:scale-95"
+            title="Print Report"
           >
-            <Printer className="w-4 h-4 mr-1.5" />
-            Print / PDF View
-          </Button>
+            <Printer className="w-4 h-4" />
+            <span>{t('print_report', 'Print Report')}</span>
+          </button>
         </div>
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* 2. PRINT-ONLY HEADER (Visible only during printing) */}
+      {/* 2. SEARCH & FILTER PANEL */}
       {/* ------------------------------------------------------------- */}
-      <div className="hidden print:block border-b-2 border-gray-900 pb-4 mb-6">
-        <div className="flex items-center justify-between">
+      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-4 print:hidden">
+        {/* Inputs Grid: Date Range, Search Query, Town, Design */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+          {/* From Date */}
           <div>
-            <h1 className="text-2xl font-black text-gray-900 tracking-wide uppercase">
-              BandhSetu — Artisan Management System
-            </h1>
-            <p className="text-sm text-gray-600 font-medium">
-              Bandhej Artisan Network · Jamnagar / Bhuj / Kutch, Gujarat
-            </p>
-          </div>
-          <div className="text-right text-xs text-gray-600">
-            <p className="font-semibold text-gray-900">{reportData?.report_title}</p>
-            <p>Printed on: {new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}</p>
-            {reportData?.start_date && (
-              <p>Period: {reportData.start_date} to {reportData.end_date || 'Present'}</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* ------------------------------------------------------------- */}
-      {/* 3. REPORT SECTION NAVIGATION TABS (Horizontal Scroll on Mobile) */}
-      {/* ------------------------------------------------------------- */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-1.5 print:hidden">
-        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar scroll-smooth">
-          {REPORT_TABS.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => handleSelectTab(tab.id)}
-                className={`flex items-center gap-2 px-3 py-2.5 rounded-lg text-xs font-semibold whitespace-nowrap transition-all touch-manipulation min-h-[44px] ${
-                  isActive
-                    ? 'bg-emerald-700 text-white shadow-xs'
-                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                }`}
-              >
-                <Icon className={`w-4 h-4 ${isActive ? 'text-white' : 'text-gray-500'}`} />
-                <span>{tab.shortName}</span>
-              </button>
-            );
-          })}
-        </div>
-      </div>
-
-      {/* ------------------------------------------------------------- */}
-      {/* 4. FILTER CONTROLS BAR (Hidden during print) */}
-      {/* ------------------------------------------------------------- */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4 print:hidden space-y-3">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          {/* Preset Buttons */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-xs font-medium text-gray-500 mr-1 flex items-center gap-1">
-              <Calendar className="w-3.5 h-3.5" />
-              Period:
-            </span>
-            {[
-              { id: 'today', label: 'Today' },
-              { id: 'yesterday', label: 'Yesterday' },
-              { id: 'this_week', label: 'This Week' },
-              { id: 'this_month', label: 'This Month' },
-              { id: 'all', label: 'All Time' },
-              { id: 'custom', label: 'Custom Range' },
-            ].map((p) => (
-              <button
-                key={p.id}
-                onClick={() => setDatePreset(p.id)}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors touch-manipulation min-h-[36px] ${
-                  datePreset === p.id
-                    ? 'bg-emerald-100 text-emerald-800 font-bold border border-emerald-300'
-                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                }`}
-              >
-                {p.label}
-              </button>
-            ))}
-          </div>
-
-          {/* Dynamic Search Box */}
-          <div className="relative min-w-[260px]">
-            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Filter by name, serial no, or item..."
-              className="w-full pl-9 pr-3 py-2 text-xs rounded-lg border border-gray-200 focus:outline-none focus:ring-2 focus:ring-emerald-500 bg-gray-50 focus:bg-white min-h-[40px]"
-            />
-            {searchQuery && (
-              <button
-                onClick={() => setSearchQuery('')}
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xs px-1"
-              >
-                ✕
-              </button>
-            )}
-          </div>
-        </div>
-
-        {/* Custom Date Pickers */}
-        {datePreset === 'custom' && (
-          <div className="flex items-center gap-3 pt-2 border-t border-gray-100 flex-wrap">
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-gray-500 font-medium">From:</span>
+            <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+              {t('from_issue_date', 'From Issue Date')}
+            </label>
+            <div className="relative">
               <input
                 type="date"
                 value={startDate}
-                onChange={(e) => setStartDate(e.target.value)}
-                className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-1 focus:ring-emerald-500 min-h-[36px]"
+                onChange={(e) => {
+                  setStartDate(e.target.value);
+                  setDatePreset('custom');
+                }}
+                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-slate-800"
               />
             </div>
-            <div className="flex items-center gap-2 text-xs">
-              <span className="text-gray-500 font-medium">To:</span>
+          </div>
+
+          {/* To Date */}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+              {t('to_issue_date', 'To Issue Date')}
+            </label>
+            <div className="relative">
               <input
                 type="date"
                 value={endDate}
-                onChange={(e) => setEndDate(e.target.value)}
-                className="px-2.5 py-1.5 border border-gray-300 rounded-lg text-xs focus:ring-1 focus:ring-emerald-500 min-h-[36px]"
+                onChange={(e) => {
+                  setEndDate(e.target.value);
+                  setDatePreset('custom');
+                }}
+                className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-slate-800"
               />
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={fetchReport}
-              className="text-xs h-[36px]"
-            >
-              Apply Dates
-            </Button>
           </div>
-        )}
+
+          {/* Search Query */}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+              {t('artisan_serial_batch', 'Artisan / Serial / Batch')}
+            </label>
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                placeholder={t('search_report_placeholder', 'e.g. Simaben, WRK-0001...')}
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-slate-800"
+              />
+            </div>
+          </div>
+
+          {/* Town Filter */}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+              {t('filter_by_town', 'Filter by Town')}
+            </label>
+            <select
+              value={selectedTown}
+              onChange={(e) => setSelectedTown(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-slate-800"
+            >
+              <option value="">{t('all_towns', 'All Towns / Villages')}</option>
+              {reportData?.available_towns.map((t) => (
+                <option key={t} value={t}>
+                  {translateEntityName(t, language)}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {/* Design Filter */}
+          <div>
+            <label className="block text-[11px] font-semibold text-slate-600 uppercase mb-1">
+              {t('filter_by_design', 'Filter by Design')}
+            </label>
+            <select
+              value={selectedDesign}
+              onChange={(e) => setSelectedDesign(e.target.value)}
+              className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-slate-800"
+            >
+              <option value="">{t('all_designs', 'All Designs / Items')}</option>
+              {reportData?.available_designs.map((d) => (
+                <option key={d} value={d}>
+                  {translateEntityName(d, language)}
+                </option>
+              ))}
+            </select>
+          </div>
+        </div>
       </div>
 
       {/* ------------------------------------------------------------- */}
-      {/* 5. SUMMARY KPI STRIP (Aggregate Metrics for Active Report) */}
+      {/* 3. SUMMARY CARDS: ARTISANS WITH PENDING WORK & REMAINING PCS */}
       {/* ------------------------------------------------------------- */}
-      {reportData && reportData.summary_metrics && Object.keys(reportData.summary_metrics).length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-4">
-          <div className="text-[11px] font-bold text-gray-400 uppercase tracking-wider mb-2">
-            Key Report Totals
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4 print:hidden">
+        {/* Card 1: Artisans with Pending Work */}
+        <div className="bg-white rounded-2xl p-4 border border-slate-200 shadow-sm flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <Users className="w-5 h-5" />
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {Object.entries(reportData.summary_metrics).map(([key, value]) => {
-              const label = key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
-              const isCurrency =
-                key.includes('wage') ||
-                key.includes('earned') ||
-                key.includes('advance') ||
-                key.includes('paid') ||
-                key.includes('payout') ||
-                key.includes('balance') ||
-                key.includes('amount') ||
-                key.includes('value') ||
-                key.includes('disbursed');
+          <div className="min-w-0">
+            <div className="text-xl font-bold text-slate-900 leading-tight truncate">
+              {summary?.total_artisans_with_pending ?? 0}
+            </div>
+            <div className="text-xs text-slate-500 font-medium">{t('artisans_with_pending_work', 'Artisans with Pending Work')}</div>
+          </div>
+        </div>
 
-              return (
-                <div key={key} className="p-2.5 rounded-lg bg-gray-50/80 border border-gray-100">
-                  <div className="text-[11px] text-gray-500 font-medium truncate">{label}</div>
-                  <div className="text-base sm:text-lg font-bold text-gray-900 mt-0.5 truncate">
-                    {isCurrency && typeof value === 'number'
-                      ? formatINR(value)
-                      : typeof value === 'number'
-                      ? value.toLocaleString('en-IN')
-                      : String(value)}
-                  </div>
-                </div>
-              );
-            })}
+        {/* Card 2: Total Remaining Pieces */}
+        <div className="bg-amber-50/70 rounded-2xl p-4 border border-amber-200 shadow-sm flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-amber-500 text-white flex items-center justify-center shrink-0 shadow-sm shadow-amber-500/20">
+            <Clock className="w-5 h-5" />
           </div>
+          <div className="min-w-0">
+            <div className="text-xl font-black text-amber-900 leading-tight truncate">
+              {summary?.total_pieces_pending ?? 0} <span className="text-xs font-normal text-amber-800">{language === 'gu' ? 'પીસ' : 'pcs'}</span>
+            </div>
+            <div className="text-xs text-amber-800 font-medium">{t('total_remaining_pieces', 'Total Remaining Pieces')}</div>
+          </div>
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 4. VIEW CONTROLS & TABLE HEADER */}
+      {/* ------------------------------------------------------------- */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2 print:hidden">
+        {/* Toggle between Detailed Table and Grouped View */}
+        <div className="flex items-center p-1 bg-slate-100 rounded-xl w-fit">
+          <button
+            onClick={() => setViewMode('detailed')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+              viewMode === 'detailed'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            {t('all_pending_distributions', 'All Pending Distributions')} ({sortedDistributions.length})
+          </button>
+          <button
+            onClick={() => setViewMode('grouped')}
+            className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-all ${
+              viewMode === 'grouped'
+                ? 'bg-white text-slate-900 shadow-sm'
+                : 'text-slate-500 hover:text-slate-900'
+            }`}
+          >
+            {t('group_by_artisan', 'Group by Artisan')} ({reportData?.artisan_groups.length ?? 0})
+          </button>
+        </div>
+
+        {/* Sort Controls */}
+        <div className="flex items-center gap-2">
+          <span className="text-xs text-slate-500">{t('sort_by_label', 'Sort by:')}</span>
+          <select
+            value={sortField}
+            onChange={(e) => setSortField(e.target.value as SortField)}
+            className="px-2.5 py-1 text-xs bg-white border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-brand-500"
+          >
+            <option value="date_asc">{t('sort_oldest_first', 'Oldest Issue Date (Ascending)')}</option>
+            <option value="date_desc">{t('sort_newest_first', 'Newest Issue Date (Descending)')}</option>
+            <option value="pending_desc">{t('sort_pending_desc', 'Highest Pending Pcs First')}</option>
+            <option value="name_asc">{t('sort_name_asc', 'Artisan Name (A-Z)')}</option>
+          </select>
+        </div>
+      </div>
+
+      {/* ------------------------------------------------------------- */}
+      {/* 5. SEARCH RESULTS — DETAILED TABLE VIEW */}
+      {/* ------------------------------------------------------------- */}
+      {viewMode === 'detailed' && (
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+          {loading ? (
+            <div className="p-16 text-center text-slate-400">
+              <RefreshCw className="w-8 h-8 mx-auto animate-spin text-brand-600 mb-2" />
+              <p className="text-sm">Calculating pending pieces against distribution records...</p>
+            </div>
+          ) : sortedDistributions.length === 0 ? (
+            <div className="p-16 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-slate-800">No Pending Work Found!</h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                All consignments issued during this period have been fully submitted and cleared, or no work distributions match the selected filters.
+              </p>
+            </div>
+          ) : (
+            <>
+              {/* Desktop Table View */}
+              <div className="hidden md:block overflow-x-auto">
+                <table className="w-full text-left border-collapse text-xs">
+                  <thead>
+                    <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold text-[11px]">
+                      <th className="py-3 px-4">{t('table_date', 'Date')}</th>
+                      <th className="py-3 px-3">{t('table_serial_no', 'Serial No.')}</th>
+                      <th className="py-3 px-4">{t('table_artisan_name', 'Artisan Name')}</th>
+                      <th className="py-3 px-3">{t('table_town', 'Town')}</th>
+                      <th className="py-3 px-4 text-right">{t('table_remaining_pcs', 'Remaining Pcs')}</th>
+                      <th className="py-3 px-4">{t('table_name_of_design', 'Name of Design')}</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {sortedDistributions.map((row) => (
+                      <tr
+                        key={row.distribution_id}
+                        className="hover:bg-slate-50/70 transition-colors group"
+                      >
+                        {/* 1. Date */}
+                        <td className="py-3 px-4 font-medium text-slate-800">
+                          {formatIndianDate(row.issue_date)}
+                        </td>
+
+                        {/* 2. Serial No. */}
+                        <td className="py-3 px-3">
+                          <span className="font-mono text-[11px] font-semibold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-md border border-brand-200/60">
+                            {row.serial_number}
+                          </span>
+                        </td>
+
+                        {/* 3. Artisan Name as clickable link to their profile */}
+                        <td className="py-3 px-4 font-semibold text-slate-900">
+                          <Link
+                            to={`/workers/${row.worker_id}`}
+                            className="inline-flex items-center gap-1.5 text-brand-600 hover:text-brand-800 hover:underline group-hover:text-brand-700 transition-colors"
+                            title="Open Artisan Profile & Khata Ledger"
+                          >
+                            <span>{translateEntityName(row.artisan_name, language)}</span>
+                            <ExternalLink className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                          </Link>
+                        </td>
+
+                        {/* 4. Town */}
+                        <td className="py-3 px-3 text-slate-600">{translateEntityName(row.town, language)}</td>
+
+                        {/* 5. Remaining Pcs */}
+                        <td className="py-3 px-4 text-right">
+                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-md font-bold text-xs bg-amber-50 text-amber-900 border border-amber-200/80">
+                            {row.remaining_pcs} {language === 'gu' ? 'પીસ' : 'pcs'}
+                          </span>
+                        </td>
+
+                        {/* 6. Name of Design */}
+                        <td className="py-3 px-4">
+                          <span className="font-medium text-slate-900">{translateEntityName(row.item_name, language)}</span>
+                          {row.knot_style && row.knot_style !== 'Standard' && (
+                            <span className="text-[11px] text-slate-400 ml-1.5 font-normal">
+                              ({translateEntityName(row.knot_style, language)})
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                  {/* Table Footer with Summary Subtotal */}
+                  <tfoot>
+                    <tr className="bg-slate-100/90 font-bold text-slate-900 border-t-2 border-slate-300">
+                      <td colSpan={4} className="py-3.5 px-4 text-slate-700">
+                        {language === 'gu'
+                          ? `કુલ બાકી માલ (${sortedDistributions.length} નોંધ):`
+                          : `Total Across ${sortedDistributions.length} Pending Consignments:`}
+                      </td>
+                      <td className="py-3.5 px-4 text-right font-black text-amber-900 text-sm">
+                        {sortedDistributions.reduce((acc, r) => acc + r.remaining_pcs, 0)} {language === 'gu' ? 'પીસ' : 'pcs'}
+                      </td>
+                      <td className="py-3.5 px-4"></td>
+                    </tr>
+                  </tfoot>
+                </table>
+              </div>
+
+              {/* Mobile Cards View (Optimized for Phones) */}
+              <div className="grid grid-cols-1 gap-3 md:hidden p-3 bg-slate-50/60 divide-y divide-slate-100">
+                {sortedDistributions.map((row) => (
+                  <div
+                    key={row.distribution_id}
+                    className="bg-white p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5"
+                  >
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-semibold text-slate-500">
+                        {formatIndianDate(row.issue_date)}
+                      </span>
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-lg font-bold text-xs bg-amber-50 text-amber-900 border border-amber-200">
+                        {row.remaining_pcs} {language === 'gu' ? 'પીસ બાકી' : 'pcs pending'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                      <Link
+                        to={`/workers/${row.worker_id}`}
+                        className="flex items-center gap-2 group text-brand-600 hover:text-brand-800"
+                      >
+                        <span className="font-mono text-xs font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded border border-brand-200">
+                          {row.serial_number}
+                        </span>
+                        <span className="font-bold text-slate-900 text-sm group-hover:underline">
+                          {translateEntityName(row.artisan_name, language)}
+                        </span>
+                        <ExternalLink className="w-3 h-3 text-slate-400" />
+                      </Link>
+                      <span className="text-xs text-slate-500">{translateEntityName(row.town, language)}</span>
+                    </div>
+
+                    <div className="text-xs text-slate-800 pt-1 flex items-center justify-between">
+                      <span className="font-medium text-slate-900">{translateEntityName(row.item_name, language)}</span>
+                      {row.knot_style && row.knot_style !== 'Standard' && (
+                        <span className="text-[11px] text-slate-500 font-mono">
+                          {translateEntityName(row.knot_style, language)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+
+                <div className="p-3.5 bg-amber-50/80 rounded-2xl border border-amber-200 text-center text-xs font-bold text-amber-900">
+                  {language === 'gu'
+                    ? `કુલ બાકી પીસ: ${sortedDistributions.reduce((acc, r) => acc + r.remaining_pcs, 0)} પીસ`
+                    : `Total Pending Pieces: ${sortedDistributions.reduce((acc, r) => acc + r.remaining_pcs, 0)} pcs`}
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
       {/* ------------------------------------------------------------- */}
-      {/* 6. TABULAR REPORT PRESENTATION */}
+      {/* 6. SEARCH RESULTS — ARTISAN-WISE GROUPED VIEW */}
       {/* ------------------------------------------------------------- */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        {/* Table Title Bar */}
-        <div className="p-4 bg-gray-50/60 border-b border-gray-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-emerald-100 text-emerald-800 flex items-center justify-center font-bold">
-              <TabIcon className="w-4 h-4" />
+      {viewMode === 'grouped' && (
+        <div className="space-y-4">
+          {loading ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center text-slate-400">
+              <RefreshCw className="w-8 h-8 mx-auto animate-spin text-brand-600 mb-2" />
+              <p className="text-sm">Grouping pending work by artisan...</p>
             </div>
-            <div>
-              <h2 className="text-base font-bold text-gray-900">{reportData?.report_title}</h2>
-              <p className="text-xs text-gray-500">{currentTabConfig.description}</p>
+          ) : reportData?.artisan_groups.length === 0 ? (
+            <div className="bg-white rounded-2xl border border-slate-200 p-16 text-center">
+              <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 className="w-6 h-6" />
+              </div>
+              <h3 className="text-base font-bold text-slate-800">No Pending Work Found!</h3>
+              <p className="text-xs text-slate-500 max-w-md mx-auto mt-1">
+                All artisans have cleared their consignments for the selected period.
+              </p>
             </div>
-          </div>
-          <div className="text-xs text-gray-500 font-medium">
-            Showing <strong className="text-gray-900">{reportData?.total_records || 0}</strong> record(s)
-          </div>
-        </div>
-
-        {/* Content State */}
-        {isLoading ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-3">
-            <LoadingSpinner size="lg" />
-            <p className="text-xs font-medium text-gray-500 animate-pulse">
-              Generating {currentTabConfig.name}...
-            </p>
-          </div>
-        ) : !reportData || reportData.rows.length === 0 ? (
-          <div className="py-16">
-            <EmptyState
-              icon={<TabIcon className="w-7 h-7" />}
-              title="No Records Found"
-              description={`No transaction or master records matched the selected period (${datePreset}) and search criteria.`}
-              actionLabel="Reset Search Filter"
-              onAction={() => {
-                setSearchQuery('');
-                setDatePreset('this_month');
-              }}
-            />
-          </div>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse text-xs">
-              <thead>
-                <tr className="bg-gray-100/80 border-b border-gray-200 text-gray-700 font-semibold uppercase tracking-wider text-[11px]">
-                  {reportData.columns.map((col) => (
-                    <th
-                      key={col.key}
-                      className={`px-4 py-3 whitespace-nowrap ${
-                        col.align === 'right'
-                          ? 'text-right'
-                          : col.align === 'center'
-                          ? 'text-center'
-                          : 'text-left'
-                      }`}
+          ) : (
+            reportData?.artisan_groups.map((group) => (
+              <div
+                key={group.worker_id}
+                className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden"
+              >
+                {/* Artisan Header Bar */}
+                <div className="bg-slate-50/90 p-4 border-b border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                  <div className="flex flex-wrap items-center gap-2.5">
+                    <Link
+                      to={`/workers/${group.worker_id}`}
+                      className="text-base font-bold text-slate-900 hover:text-brand-600 hover:underline flex items-center gap-1.5 transition-colors"
+                      title="Click to view worker profile"
                     >
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-200">
-                {reportData.rows.map((row, rIdx) => (
-                  <tr
-                    key={rIdx}
-                    className="hover:bg-emerald-50/30 transition-colors odd:bg-white even:bg-gray-50/40"
-                  >
-                    {reportData.columns.map((col) => {
-                      const val = row[col.key];
-                      return (
-                        <td
-                          key={col.key}
-                          className={`px-4 py-2.5 whitespace-nowrap text-gray-800 ${
-                            col.align === 'right'
-                              ? 'text-right font-mono'
-                              : col.align === 'center'
-                              ? 'text-center'
-                              : 'text-left'
-                          }`}
-                        >
-                          {renderCellValue(val, col.format)}
+                      <span>{translateEntityName(group.artisan_name, language)}</span>
+                      <ExternalLink className="w-3.5 h-3.5 text-brand-600" />
+                    </Link>
+
+                    <span className="font-mono text-xs font-semibold px-2 py-0.5 rounded-md bg-brand-50 text-brand-700 border border-brand-200">
+                      {group.serial_number}
+                    </span>
+
+                    <span className="text-xs text-slate-600 bg-white px-2 py-0.5 rounded-md border border-slate-200 flex items-center gap-1">
+                      <MapPin className="w-3 h-3 text-slate-400" />
+                      <span>{translateEntityName(group.town, language)}</span>
+                    </span>
+
+                    {group.phone && (
+                      <span className="text-xs text-slate-500 bg-white px-2 py-0.5 rounded-md border border-slate-200 flex items-center gap-1">
+                        <Phone className="w-3 h-3 text-slate-400" />
+                        <span>{group.phone}</span>
+                      </span>
+                    )}
+
+                    {group.is_zero_submission && (
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-100 text-rose-800 border border-rose-200">
+                        {language === 'gu' ? 'ઝીરો જમા' : 'Zero Submissions'}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Artisan Subtotal Summary Tag */}
+                  <div className="flex items-center gap-3 shrink-0">
+                    <div className="text-xs text-slate-500">
+                      {language === 'gu' ? 'આપેલ:' : 'Given:'} <strong className="text-slate-800">{group.total_given}</strong> | {language === 'gu' ? 'જમા:' : 'Received:'}{' '}
+                      <strong className="text-emerald-700">{group.total_received}</strong>
+                    </div>
+                    <div className="px-3 py-1 bg-amber-500 text-white rounded-xl text-xs font-bold shadow-sm shadow-amber-500/20">
+                      {language === 'gu' ? `કુલ બાકી: ${group.total_pending} પીસ` : `Total Pending: ${group.total_pending} pcs`}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sub-table for this Artisan's Pending Distributions */}
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left border-collapse text-xs">
+                    <thead>
+                      <tr className="bg-white border-b border-slate-100 text-slate-400 uppercase tracking-wider font-semibold text-[10px]">
+                        <th className="py-2.5 px-4">{language === 'gu' ? 'આપ્યા તારીખ' : 'Date Given'}</th>
+                        <th className="py-2.5 px-3">{t('col_design_name', 'Design / Item')}</th>
+                        <th className="py-2.5 px-3">{language === 'gu' ? 'બેચ કોડ' : 'Batch Code'}</th>
+                        <th className="py-2.5 px-3 text-right">{language === 'gu' ? 'આપેલ' : 'Given'}</th>
+                        <th className="py-2.5 px-3 text-right">{language === 'gu' ? 'જમા' : 'Received'}</th>
+                        <th className="py-2.5 px-4 text-right">{language === 'gu' ? 'બાકી' : 'Pending'}</th>
+                        <th className="py-2.5 px-4 text-center">{t('col_status', 'Status')}</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100">
+                      {group.distributions.map((dist) => (
+                        <tr key={dist.distribution_id} className="hover:bg-slate-50/60">
+                          <td className="py-2.5 px-4 font-medium text-slate-800">
+                            {formatIndianDate(dist.issue_date)}
+                          </td>
+                          <td className="py-2.5 px-3 font-semibold text-slate-900">
+                            {translateEntityName(dist.item_name, language)}
+                            {dist.knot_style && dist.knot_style !== 'Standard' && (
+                              <span className="text-[10px] font-normal text-slate-400 ml-1.5">
+                                ({translateEntityName(dist.knot_style, language)})
+                              </span>
+                            )}
+                          </td>
+                          <td className="py-2.5 px-3 font-mono text-[11px] text-slate-500">
+                            {dist.batch_code}
+                          </td>
+                          <td className="py-2.5 px-3 text-right text-slate-700">{dist.given_pcs}</td>
+                          <td className="py-2.5 px-3 text-right text-emerald-700 font-semibold">
+                            {dist.received_pcs}
+                          </td>
+                          <td className="py-2.5 px-4 text-right font-bold text-amber-800">
+                            {dist.remaining_pcs} {language === 'gu' ? 'પીસ' : 'pcs'}
+                          </td>
+                          <td className="py-2.5 px-4 text-center">
+                            {dist.is_zero_return ? (
+                              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-rose-50 text-rose-700 border border-rose-200">
+                                {language === 'gu' ? '૦ જમા' : '0 returned'}
+                              </span>
+                            ) : dist.days_pending > 14 ? (
+                              <span className="px-2 py-0.5 text-[10px] font-bold rounded-full bg-amber-50 text-amber-800 border border-amber-200">
+                                {language === 'gu' ? `મુદત વીતી (${dist.days_pending}દિ)` : `Overdue (${dist.days_pending}d)`}
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-slate-400">{dist.days_pending}{language === 'gu' ? ' દિવસ' : 'd'}</span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-amber-50/40 font-semibold text-slate-800 border-t border-amber-200/60">
+                        <td colSpan={3} className="py-2 px-4 text-amber-900 text-xs">
+                          {language === 'gu'
+                            ? `${translateEntityName(group.artisan_name, language)} પાસે કુલ બાકી:`
+                            : `Total pending with ${group.artisan_name}:`}
                         </td>
-                      );
-                    })}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                        <td className="py-2 px-3 text-right">{group.total_given}</td>
+                        <td className="py-2 px-3 text-right text-emerald-700">{group.total_received}</td>
+                        <td className="py-2 px-4 text-right font-bold text-amber-900 text-xs">
+                          {group.total_pending} {language === 'gu' ? 'પીસ' : 'pieces'}
+                        </td>
+                        <td className="py-2 px-4"></td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            ))
+          )}
+        </div>
+      )}
     </div>
   );
 };
+
+export default Reports;

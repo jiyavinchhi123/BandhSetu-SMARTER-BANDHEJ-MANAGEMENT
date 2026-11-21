@@ -59,3 +59,58 @@ class ReportResponse(BaseModel):
     summary_metrics: Dict[str, Any]
     columns: List[ReportColumn]
     rows: List[Dict[str, Any]]
+
+
+# --- Artisan Pending Work & Non-Submission Report Schemas ---
+
+class PendingWorkDistributionItem(BaseModel):
+    distribution_id: int
+    batch_code: str
+    worker_id: int
+    artisan_name: str
+    serial_number: str
+    town: str
+    phone: str
+    issue_date: str
+    item_name: str
+    knot_style: Optional[str] = None
+    rate_per_piece: float
+    given_pcs: int
+    received_pcs: int
+    rejected_pcs: int
+    remaining_pcs: int
+    days_pending: int
+    is_zero_return: bool
+
+
+class ArtisanPendingGroup(BaseModel):
+    worker_id: int
+    artisan_name: str
+    serial_number: str
+    town: str
+    phone: str
+    total_given: int
+    total_received: int
+    total_rejected: int
+    total_pending: int
+    is_zero_submission: bool
+    distributions: List[PendingWorkDistributionItem]
+
+
+class PendingWorkSummary(BaseModel):
+    total_artisans_with_pending: int
+    total_pieces_given: int
+    total_pieces_received: int
+    total_pieces_pending: int
+    artisans_zero_submissions: int
+
+
+class PendingWorkReportResponse(BaseModel):
+    start_date: str
+    end_date: str
+    date_preset: Optional[str] = None
+    summary: PendingWorkSummary
+    distributions: List[PendingWorkDistributionItem]
+    artisan_groups: List[ArtisanPendingGroup]
+    available_towns: List[str]
+    available_designs: List[str]

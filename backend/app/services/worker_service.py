@@ -86,7 +86,7 @@ class WorkerService:
             query = query.filter(Worker.village.ilike(village_val.strip()))
 
         total = query.count()
-        workers = query.order_by(Worker.id.desc()).offset(offset).limit(limit).all()
+        workers = query.order_by(Worker.id.asc()).offset(offset).limit(limit).all()
         return workers, total
 
     @classmethod

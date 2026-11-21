@@ -5,9 +5,13 @@ from sqlalchemy.orm import Session
 
 from app.database.session import get_db
 from app.models.user import User
-from app.api.deps import require_manager_or_admin
+from app.api.deps import require_admin, require_manager_or_admin
 from app.services.analytics_service import AnalyticsService
-from app.schemas.analytics import DashboardMetricsResponse, ReportResponse
+from app.schemas.analytics import (
+    DashboardMetricsResponse,
+    ReportResponse,
+    PendingWorkReportResponse,
+)
 
 router = APIRouter()
 
@@ -62,7 +66,7 @@ def get_report_data(
         Query(description="Filter by artisan name, serial number, or item name"),
     ] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_manager_or_admin),
+    current_user: User = Depends(require_admin),
 ) -> ReportResponse:
     return AnalyticsService.get_report_data(
         db=db,
@@ -89,7 +93,7 @@ def export_report_csv(
     item_id: Annotated[Optional[int], Query(description="Item ID")] = None,
     search_query: Annotated[Optional[str], Query(description="Search query")] = None,
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_manager_or_admin),
+    current_user: User = Depends(require_admin),
 ):
     report_data = AnalyticsService.get_report_data(
         db=db,
@@ -104,6 +108,68 @@ def export_report_csv(
     csv_content = AnalyticsService.export_report_csv(report_data)
     today_str = date.today().strftime("%Y%m%d")
     filename = f"bandhsetu_{report_type}_{today_str}.csv"
+
+    return Response(
+        content=csv_content,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"'
+        },
+    )
+
+
+@router.get(
+    "/pending-work-report",
+    response_model=PendingWorkReportResponse,
+    summary="Artisan Pending Work & Non-Submission Report",
+)
+def get_pending_work_report(
+    date_preset: Annotated[Optional[str], Query(description="this_month, prev_month, last_30_days, all_time, custom")] = "this_month",
+    start_date: Annotated[Optional[date], Query(description="Start issue date")] = None,
+    end_date: Annotated[Optional[date], Query(description="End issue date")] = None,
+    q: Annotated[Optional[str], Query(description="Artisan name, serial no., batch code")] = None,
+    town: Annotated[Optional[str], Query(description="Filter by town")] = None,
+    item_name: Annotated[Optional[str], Query(description="Filter by design name")] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+) -> PendingWorkReportResponse:
+    return AnalyticsService.get_pending_work_report(
+        db=db,
+        start_date=start_date,
+        end_date=end_date,
+        date_preset=date_preset,
+        q=q,
+        town=town,
+        item_name=item_name,
+    )
+
+
+@router.get(
+    "/pending-work-report/csv",
+    summary="Export Artisan Pending Work Report as CSV",
+)
+def export_pending_work_csv(
+    date_preset: Annotated[Optional[str], Query()] = "this_month",
+    start_date: Annotated[Optional[date], Query()] = None,
+    end_date: Annotated[Optional[date], Query()] = None,
+    q: Annotated[Optional[str], Query()] = None,
+    town: Annotated[Optional[str], Query()] = None,
+    item_name: Annotated[Optional[str], Query()] = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin),
+):
+    report_data = AnalyticsService.get_pending_work_report(
+        db=db,
+        start_date=start_date,
+        end_date=end_date,
+        date_preset=date_preset,
+        q=q,
+        town=town,
+        item_name=item_name,
+    )
+    csv_content = AnalyticsService.export_pending_work_csv(report_data)
+    today_str = date.today().strftime("%Y%m%d")
+    filename = f"bandhsetu_pending_work_{today_str}.csv"
 
     return Response(
         content=csv_content,

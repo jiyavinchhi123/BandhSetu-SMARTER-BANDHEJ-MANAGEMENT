@@ -1,5 +1,5 @@
 from typing import Generator, Optional
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, status, Query
 from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from app.database.session import get_db
@@ -15,20 +15,23 @@ reusable_oauth2 = OAuth2PasswordBearer(
 
 def get_current_user(
     db: Session = Depends(get_db),
-    token: Optional[str] = Depends(reusable_oauth2)
+    token: Optional[str] = Depends(reusable_oauth2),
+    query_token: Optional[str] = Query(None, alias="token"),
 ) -> User:
     """
-    Validates JWT token, verifies user existence, active status,
+    Validates JWT token (from Authorization header or query parameter 'token'),
+    verifies user existence, active status,
     and enforces server-side Manager operating hours and lock status.
     """
-    if not token:
+    effective_token = token or query_token
+    if not effective_token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Authentication credentials were not provided.",
             headers={"WWW-Authenticate": "Bearer"},
         )
 
-    payload = decode_access_token(token)
+    payload = decode_access_token(effective_token)
     if not payload:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,

@@ -18,6 +18,10 @@ from app.schemas.analytics import (
     RecentActivityItem,
     ReportColumn,
     ReportResponse,
+    PendingWorkDistributionItem,
+    ArtisanPendingGroup,
+    PendingWorkSummary,
+    PendingWorkReportResponse,
 )
 
 
@@ -946,5 +950,210 @@ class AnalyticsService:
                 else:
                     row_vals.append(str(val))
             writer.writerow(row_vals)
+
+        return output.getvalue()
+
+    @staticmethod
+    def get_pending_work_report(
+        db: Session,
+        start_date: Optional[date] = None,
+        end_date: Optional[date] = None,
+        date_preset: Optional[str] = "this_month",
+        q: Optional[str] = None,
+        town: Optional[str] = None,
+        item_name: Optional[str] = None,
+    ) -> PendingWorkReportResponse:
+        """
+        Artisan Pending Work & Non-Submission Report.
+        Identifies artisans with unreturned / partially returned pieces
+        based on the ORIGINAL material distribution date (issued_on).
+        """
+        today = date.today()
+
+        # 1. Resolve date range based on date_preset or custom dates
+        if date_preset == "this_month":
+            resolved_start = today.replace(day=1)
+            resolved_end = today
+        elif date_preset == "prev_month":
+            curr_first = today.replace(day=1)
+            resolved_end = curr_first - timedelta(days=1)
+            resolved_start = resolved_end.replace(day=1)
+        elif date_preset == "last_30_days":
+            resolved_start = today - timedelta(days=30)
+            resolved_end = today
+        elif date_preset == "all_time":
+            resolved_start = date(2020, 1, 1)
+            resolved_end = today
+        elif date_preset == "custom":
+            resolved_start = start_date or today.replace(day=1)
+            resolved_end = end_date or today
+        else:
+            resolved_start = start_date or today.replace(day=1)
+            resolved_end = end_date or today
+
+        # 2. Query WorkDistributions issued within [resolved_start, resolved_end]
+        query = db.query(WorkDistribution).join(Worker, WorkDistribution.worker_id == Worker.id)
+        query = query.filter(
+            WorkDistribution.issue_date >= resolved_start,
+            WorkDistribution.issue_date <= resolved_end
+        )
+
+        if town and town.strip():
+            query = query.filter(Worker.town == town.strip())
+
+        if item_name and item_name.strip():
+            query = query.filter(WorkDistribution.item_name_snapshot == item_name.strip())
+
+        if q and q.strip():
+            term = f"%{q.strip().lower()}%"
+            query = query.filter(
+                or_(
+                    func.lower(Worker.full_name).like(term),
+                    func.lower(Worker.serial_number).like(term),
+                    func.lower(WorkDistribution.batch_code).like(term),
+                    func.lower(WorkDistribution.item_name_snapshot).like(term),
+                )
+            )
+
+        # Oldest issue date first
+        distributions_db = query.order_by(WorkDistribution.issue_date.asc(), WorkDistribution.id.asc()).all()
+
+        # 3. Dynamic Return and Pending Pieces Calculation
+        pending_items: List[PendingWorkDistributionItem] = []
+        artisan_map: Dict[int, List[PendingWorkDistributionItem]] = {}
+        worker_info_map: Dict[int, Worker] = {}
+
+        for dist in distributions_db:
+            worker = dist.worker
+            worker_info_map[worker.id] = worker
+
+            # Sum actual returns for this distribution
+            returns = db.query(WorkReturn).filter(WorkReturn.distribution_id == dist.id).all()
+            received_pcs = sum(r.quantity_returned for r in returns)
+            rejected_pcs = sum(r.quantity_rejected for r in returns)
+            remaining_pcs = dist.quantity_issued - received_pcs - rejected_pcs
+
+            # Exclude fully returned distributions (Remaining Pieces <= 0)
+            if remaining_pcs <= 0:
+                continue
+
+            days_pending = max(0, (today - dist.issue_date).days)
+            is_zero_return = (received_pcs == 0)
+
+            item_dto = PendingWorkDistributionItem(
+                distribution_id=dist.id,
+                batch_code=dist.batch_code,
+                worker_id=worker.id,
+                artisan_name=worker.full_name,
+                serial_number=worker.serial_number,
+                town=worker.town or "Anjar",
+                phone=worker.phone or "",
+                issue_date=dist.issue_date.strftime("%Y-%m-%d"),
+                item_name=dist.item_name_snapshot,
+                knot_style=dist.knot_style or "Standard",
+                rate_per_piece=float(dist.rate_per_piece),
+                given_pcs=dist.quantity_issued,
+                received_pcs=received_pcs,
+                rejected_pcs=rejected_pcs,
+                remaining_pcs=remaining_pcs,
+                days_pending=days_pending,
+                is_zero_return=is_zero_return,
+            )
+            pending_items.append(item_dto)
+
+            if worker.id not in artisan_map:
+                artisan_map[worker.id] = []
+            artisan_map[worker.id].append(item_dto)
+
+        # 4. Group by Artisan
+        artisan_groups: List[ArtisanPendingGroup] = []
+        artisans_zero_submissions_count = 0
+
+        for worker_id, items in artisan_map.items():
+            worker = worker_info_map[worker_id]
+            total_given = sum(i.given_pcs for i in items)
+            total_received = sum(i.received_pcs for i in items)
+            total_rejected = sum(i.rejected_pcs for i in items)
+            total_pending = sum(i.remaining_pcs for i in items)
+            is_zero_sub = any(i.is_zero_return for i in items)
+            if is_zero_sub:
+                artisans_zero_submissions_count += 1
+
+            artisan_groups.append(
+                ArtisanPendingGroup(
+                    worker_id=worker.id,
+                    artisan_name=worker.full_name,
+                    serial_number=worker.serial_number,
+                    town=worker.town or "Anjar",
+                    phone=worker.phone or "",
+                    total_given=total_given,
+                    total_received=total_received,
+                    total_rejected=total_rejected,
+                    total_pending=total_pending,
+                    is_zero_submission=is_zero_sub,
+                    distributions=items,
+                )
+            )
+
+        # Sort artisan groups by total pending descending
+        artisan_groups.sort(key=lambda g: (-g.total_pending, g.artisan_name))
+
+        # 5. Summary Metrics
+        summary = PendingWorkSummary(
+            total_artisans_with_pending=len(artisan_groups),
+            total_pieces_given=sum(i.given_pcs for i in pending_items),
+            total_pieces_received=sum(i.received_pcs for i in pending_items),
+            total_pieces_pending=sum(i.remaining_pcs for i in pending_items),
+            artisans_zero_submissions=artisans_zero_submissions_count,
+        )
+
+        # 6. Available dropdown filter values
+        all_towns = [r[0] for r in db.query(Worker.town).distinct().all() if r[0]]
+        all_designs = [r[0] for r in db.query(Item.item_name).distinct().all() if r[0]]
+
+        return PendingWorkReportResponse(
+            start_date=resolved_start.strftime("%Y-%m-%d"),
+            end_date=resolved_end.strftime("%Y-%m-%d"),
+            date_preset=date_preset,
+            summary=summary,
+            distributions=pending_items,
+            artisan_groups=artisan_groups,
+            available_towns=sorted(all_towns),
+            available_designs=sorted(all_designs),
+        )
+
+    @staticmethod
+    def export_pending_work_csv(
+        report_data: PendingWorkReportResponse
+    ) -> str:
+        output = StringIO()
+        writer = csv.writer(output)
+
+        # ONLY Table Header
+        writer.writerow([
+            "Date",
+            "Serial No.",
+            "Artisan Name",
+            "Town",
+            "Remaining Pcs",
+            "Name of Design",
+        ])
+
+        for item in report_data.distributions:
+            # Format date as DD/MM/YYYY
+            try:
+                dt = datetime.strptime(item.issue_date, "%Y-%m-%d")
+                formatted_date = dt.strftime("%d/%m/%Y")
+            except Exception:
+                formatted_date = item.issue_date
+
+            writer.writerow([
+                formatted_date,
+                item.serial_number,
+                item.artisan_name,
+                item.town,
+                item.remaining_pcs,
+                item.item_name,
+            ])
 
         return output.getvalue()

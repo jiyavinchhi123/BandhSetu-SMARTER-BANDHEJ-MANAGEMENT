@@ -43,6 +43,8 @@ import { MaterialDebitCreditLedger } from '../components/ledger/MaterialDebitCre
 import { MoneyDebitCreditLedger } from '../components/ledger/MoneyDebitCreditLedger';
 import { formatINR, formatIndianDate } from '../utils/formatters';
 import { useToast } from '../hooks/useToast';
+import { useLanguage } from '../context/LanguageContext';
+import { translateEntityName } from '../utils/translations';
 
 const KNOT_STYLES = [
   'Bharti (Dense Round Knots)',
@@ -64,6 +66,7 @@ export const WorkerProfile: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { t, language } = useLanguage();
 
   const workerId = Number(id);
 
@@ -98,7 +101,7 @@ export const WorkerProfile: React.FC = () => {
   // Record Payment Modal State
   const [isPaymentOpen, setIsPaymentOpen] = useState(false);
   const [paymentType, setPaymentType] = useState('Wage Payout');
-  const [paymentAmount, setPaymentAmount] = useState(2000);
+  const [paymentAmount, setPaymentAmount] = useState<number | ''>(0);
   const [paymentMode, setPaymentMode] = useState('Cash');
   const [refNo, setRefNo] = useState('');
   const [payNotes, setPayNotes] = useState('');
@@ -290,7 +293,7 @@ export const WorkerProfile: React.FC = () => {
       });
 
       setIsPaymentOpen(false);
-      setPaymentAmount(2000);
+      setPaymentAmount(0);
       setRefNo('');
       setPayNotes('');
       loadWorkerData();
@@ -368,7 +371,11 @@ export const WorkerProfile: React.FC = () => {
       }
     });
 
-    return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    return items.sort((a, b) => {
+      const timeDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (timeDiff !== 0) return timeDiff;
+      return String(a.id).localeCompare(String(b.id));
+    });
   }, [distributions]);
 
   const allGivenItems = useMemo(() => {
@@ -385,7 +392,11 @@ export const WorkerProfile: React.FC = () => {
       returnedPcs: d.quantity_returned,
       dueDate: d.due_date,
       status: d.status,
-    })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    })).sort((a, b) => {
+      const timeDiff = new Date(a.date).getTime() - new Date(b.date).getTime();
+      if (timeDiff !== 0) return timeDiff;
+      return a.distObj.id - b.distObj.id;
+    });
   }, [distributions]);
 
   const totalReceivedPcs = allReceivedItems.reduce((sum, item) => sum + item.pcs, 0);
@@ -393,6 +404,22 @@ export const WorkerProfile: React.FC = () => {
   const totalGivenPcs = allGivenItems.reduce((sum, item) => sum + item.pcs, 0);
   const totalGivenAmount = allGivenItems.reduce((sum, item) => sum + item.amount, 0);
   const netPendingPcs = totalGivenPcs - totalReceivedPcs;
+
+  const totalPaidAmount = useMemo(() => {
+    return payments.reduce((sum, p) => {
+      if (p.payment_type === 'Wage Payout' || p.payment_type === 'Advance Given') {
+        return sum + Number(p.amount);
+      }
+      return sum;
+    }, 0);
+  }, [payments]);
+
+  const netPayableBalance = Math.max(0, totalReceivedAmount - totalPaidAmount);
+
+  const handleOpenPaymentModal = () => {
+    setPaymentAmount(netPayableBalance > 0 ? netPayableBalance : 0);
+    setIsPaymentOpen(true);
+  };
 
   if (isLoading || !worker) {
     return <LoadingSpinner label="Loading artisan profile..." size="lg" />;
@@ -408,148 +435,118 @@ export const WorkerProfile: React.FC = () => {
         >
           <ArrowLeft className="w-4 h-4" />
         </button>
-        <span className="text-xs text-slate-400">Worker Directory</span>
+        <span className="text-xs text-slate-400">{t('worker_directory', 'Worker Directory')}</span>
         <span className="text-xs text-slate-400">/</span>
-        <span className="text-xs font-bold text-slate-700">{worker.full_name}</span>
+        <span className="text-xs font-bold text-slate-700">{translateEntityName(worker.full_name, language)}</span>
       </div>
 
-      {/* Hero Card: Prominently showing Pending Quantities & Payable Balance */}
-      <Card className="p-6 border-slate-200 bg-gradient-to-r from-white via-slate-50 to-brand-50/20 shadow-xs space-y-6">
+      {/* Hero Card: Worker Identity & Key Accounting Stats */}
+      <Card className="p-5 sm:p-6 border-slate-200 bg-white shadow-2xs space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           {/* Identity & Contact */}
           <div className="flex items-start gap-4">
-            <div className="w-16 h-16 rounded-3xl bg-brand-600 text-white flex items-center justify-center font-extrabold text-2xl shadow-md shadow-brand-500/20 shrink-0">
+            <div className="w-14 h-14 rounded-2xl bg-brand-600 text-white flex items-center justify-center font-bold text-xl shadow-xs shrink-0">
               {worker.full_name.split(' ').map((n) => n[0]).join('')}
             </div>
 
             <div className="space-y-1">
               <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="font-mono text-xs font-bold text-brand-700 bg-brand-100/70 px-2.5 py-0.5 rounded-lg border border-brand-200">
+                <span className="font-mono text-xs font-bold text-brand-800 bg-brand-50 px-2.5 py-0.5 rounded-md border border-brand-200">
                   {worker.serial_number}
                 </span>
-                <h1 className="text-xl sm:text-2xl font-extrabold text-slate-900">
-                  {worker.full_name}
+                <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
+                  {translateEntityName(worker.full_name, language)}
                 </h1>
                 <Badge variant={worker.status === 'Active' ? 'success' : 'neutral'} dot>
-                  {worker.status}
+                  {worker.status === 'Active' ? t('active', 'Active') : t('inactive', 'Inactive')}
                 </Badge>
               </div>
 
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 pt-1">
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 pt-0.5">
                 <span className="flex items-center gap-1.5 font-mono">
                   <Phone className="w-3.5 h-3.5 text-slate-400" />
                   {worker.phone}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <MapPin className="w-3.5 h-3.5 text-slate-400" />
-                  {worker.town || worker.village || 'Gujarat'}
-                  {worker.address ? ` • ${worker.address}` : ''}
+                  {translateEntityName(worker.town || worker.village || 'Gujarat', language)}
+                  {worker.address ? ` • ${translateEntityName(worker.address, language)}` : ''}
                 </span>
                 <span className="flex items-center gap-1.5">
                   <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                  Joined: {formatIndianDate(worker.joining_date)}
+                  {t('joined', 'Joined')}: {formatIndianDate(worker.joining_date)}
                 </span>
               </div>
             </div>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <Button
-              variant="primary"
-              size="md"
-              icon={<Plus className="w-4 h-4" />}
-              onClick={() => setIsDistributeOpen(true)}
-            >
-              Issue Consignment
-            </Button>
+          <div className="flex items-center gap-2 shrink-0">
             <Button
               variant="outline"
-              size="md"
-              icon={<IndianRupee className="w-4 h-4" />}
-              onClick={() => setIsPaymentOpen(true)}
-            >
-              Record Payment
-            </Button>
-            <Button
-              variant="ghost"
-              size="md"
-              icon={<Edit className="w-4 h-4" />}
+              size="sm"
+              icon={<Edit className="w-3.5 h-3.5" />}
               onClick={() => setIsEditOpen(true)}
             >
-              Edit Details
+              {t('edit_details', 'Edit Details')}
             </Button>
           </div>
         </div>
 
-        {/* PROMINENT OPERATIONAL & FINANCIAL STATS */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 border-t border-slate-200/80">
-          {/* Stat 1: Pending Quantities */}
-          <div className="p-4 rounded-2xl bg-amber-500/10 border border-amber-300/60 flex items-center justify-between">
+        {/* OPERATIONAL & FINANCIAL STATS: REMAINING PIECES & NET PAYABLE */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-4 border-t border-slate-100">
+          {/* Stat 1: Remaining Pieces */}
+          <div className="p-4 rounded-xl bg-amber-50/60 border border-amber-200/80 flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold text-amber-800 uppercase tracking-wider">
-                Pending Saree Knotting
+              <p className="text-[11px] font-bold text-amber-900 uppercase tracking-wider">
+                {t('remaining_pieces_card', 'Remaining Pieces')}
               </p>
-              <p className="text-2xl sm:text-3xl font-extrabold text-amber-900 mt-1">
-                {worker.pending_pieces}{' '}
-                <span className="text-sm font-semibold text-amber-700">Pieces</span>
+              <p className="text-2xl font-bold text-amber-950 mt-1">
+                {netPendingPcs}{' '}
+                <span className="text-xs font-semibold text-amber-800">{t('pieces_unit', 'Pieces')}</span>
               </p>
-              <p className="text-[11px] text-amber-700 mt-0.5 font-medium">Currently with artisan</p>
+              <p className="text-[11px] text-amber-700 mt-0.5">{t('currently_pending_artisan', 'Currently pending with artisan')}</p>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-800 flex items-center justify-center">
+            <div className="w-11 h-11 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center">
               <Package className="w-6 h-6" />
             </div>
           </div>
 
-          {/* Stat 2: Payable Balance */}
-          <div className="p-4 rounded-2xl bg-emerald-500/10 border border-emerald-300/60 flex items-center justify-between">
+          {/* Stat 2: Total i.e. Earnings - Earlier Paid */}
+          <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-200/80 flex items-center justify-between">
             <div>
-              <p className="text-xs font-bold text-emerald-800 uppercase tracking-wider">
-                Payable Wage Balance
+              <p className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider">
+                {t('payable_balance_card', 'Payable Balance (Earnings − Earlier Paid)')}
               </p>
-              <p className="text-2xl sm:text-3xl font-extrabold text-emerald-900 mt-1">
-                {formatINR(worker.payable_balance)}
+              <p className="text-2xl font-bold text-emerald-950 mt-1 font-mono">
+                {formatINR(netPayableBalance)}
               </p>
-              <p className="text-[11px] text-emerald-700 mt-0.5 font-medium">Ready for disbursal</p>
+              <p className="text-[11px] text-emerald-700 mt-0.5">
+                {t('total_earned_label', 'Total Earned')} ({formatINR(totalReceivedAmount)}) − {t('earlier_paid_label', 'Earlier Paid')} ({formatINR(totalPaidAmount)})
+              </p>
             </div>
-            <div className="w-12 h-12 rounded-2xl bg-emerald-500/20 text-emerald-800 flex items-center justify-center">
+            <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
               <IndianRupee className="w-6 h-6" />
-            </div>
-          </div>
-
-          {/* Stat 3: Total Lifetime Earnings */}
-          <div className="p-4 rounded-2xl bg-slate-100 border border-slate-200 flex items-center justify-between">
-            <div>
-              <p className="text-xs font-bold text-slate-600 uppercase tracking-wider">
-                Lifetime Earnings
-              </p>
-              <p className="text-2xl sm:text-3xl font-extrabold text-slate-800 mt-1">
-                {formatINR(worker.total_earned)}
-              </p>
-              <p className="text-[11px] text-slate-500 mt-0.5 font-medium">Cumulative work value</p>
-            </div>
-            <div className="w-12 h-12 rounded-2xl bg-slate-200/80 text-slate-700 flex items-center justify-center">
-              <CheckCircle2 className="w-6 h-6" />
             </div>
           </div>
         </div>
       </Card>
 
       {/* 3-IN-1 SINGLE STRUCTURE: TWO-SIDED ARTISAN WORK KHATA (Received on Left, Given on Right) */}
-      <Card className="space-y-6 p-4 sm:p-6 border-slate-200 shadow-sm">
+      <Card className="space-y-5 p-4 sm:p-5 border-slate-200 shadow-2xs bg-white">
         {/* Khata Header & Top Actions */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-3 border-b border-slate-200">
           <div>
             <div className="flex items-center gap-2">
-              <span className="p-2 rounded-xl bg-brand-100 text-brand-700">
-                <Layers className="w-5 h-5" />
+              <span className="p-1.5 rounded-lg bg-slate-100 text-slate-700">
+                <Layers className="w-4 h-4" />
               </span>
-              <h2 className="font-extrabold text-slate-900 text-lg sm:text-xl">
-                Artisan Work & Movement Ledger (Khata)
+              <h2 className="font-bold text-slate-900 text-base sm:text-lg">
+                {t('khata_title', 'Artisan Work & Movement Ledger (Khata)')}
               </h2>
             </div>
-            <p className="text-xs text-slate-500 mt-1">
-              Single unified ledger structure: <strong>Received on Left</strong> and <strong>Given on Right</strong> in format <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700 font-mono text-[11px]">Date | No of Pcs | Amount | Name of Design</code>
+            <p className="text-xs text-slate-500 mt-0.5">
+              {t('khata_subtitle', 'Dual register: Received on Left and Given on Right (Oldest at top, latest at bottom)')}
             </p>
           </div>
 
@@ -559,9 +556,9 @@ export const WorkerProfile: React.FC = () => {
               size="sm"
               icon={<Plus className="w-3.5 h-3.5" />}
               onClick={() => setIsDistributeOpen(true)}
-              className="bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-xs"
+              className="font-medium text-xs shadow-2xs"
             >
-              + Give Work
+              {t('give_work', '+ Give Work')}
             </Button>
             <Button
               variant="outline"
@@ -575,84 +572,80 @@ export const WorkerProfile: React.FC = () => {
                   showToast({ type: 'info', title: 'No Pending Work', message: 'All given work has been returned.' });
                 }
               }}
-              className="border-emerald-300 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 font-bold text-xs shadow-xs"
+              className="border-slate-200 text-slate-700 bg-white hover:bg-slate-50 font-medium text-xs shadow-2xs"
             >
-              ↗ Receive Return
+              {t('receive_return', 'Receive Return')}
             </Button>
             <Button
               variant="outline"
               size="sm"
-              icon={<IndianRupee className="w-3.5 h-3.5 text-blue-600" />}
-              onClick={() => setIsPaymentOpen(true)}
-              className="border-blue-300 text-blue-800 bg-blue-50 hover:bg-blue-100 font-bold text-xs shadow-xs"
+              icon={<IndianRupee className="w-3.5 h-3.5 text-slate-600" />}
+              onClick={handleOpenPaymentModal}
+              className="border-slate-200 text-slate-700 bg-white hover:bg-slate-50 font-medium text-xs shadow-2xs"
             >
-              ₹ Record Payment
+              {t('make_payment', 'Make Payment')}
             </Button>
           </div>
         </div>
 
         {/* TWO-SIDED KHATA TABLE: LEFT = RECEIVED | RIGHT = GIVEN */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border-2 border-slate-300 rounded-2xl overflow-hidden shadow-xs divide-y lg:divide-y-0 lg:divide-x-2 divide-slate-300 bg-white">
+        <div className="grid grid-cols-1 lg:grid-cols-2 border border-slate-200 rounded-xl overflow-hidden shadow-2xs divide-y lg:divide-y-0 lg:divide-x divide-slate-200 bg-white">
           
           {/* ======================================================== */}
-          {/* LEFT SIDE: RECEIVED (Work Returned by Artisan)          */}
-          {/* Format: Date | No of Pcs | Amount(auto) | Name of design*/}
+          {/* LEFT SIDE: RECEIVED FROM WORKER                          */}
+          {/* Format: DATE | NO. OF PCS | AMOUNT | NAME OF DESIGN     */}
           {/* ======================================================== */}
-          <div className="flex flex-col bg-emerald-50/20">
-            <div className="bg-emerald-800 text-white px-4 py-3 flex items-center justify-between border-b border-emerald-900">
+          <div className="flex flex-col bg-white">
+            {/* Section Header: Subtle Mint */}
+            <div className="bg-emerald-50/70 border-b border-emerald-200/80 px-4 py-2.5 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-emerald-700 text-white">
-                  <ArrowUpRight className="w-4 h-4" />
+                <div className="p-1 rounded-md bg-emerald-100 text-emerald-700">
+                  <ArrowUpRight className="w-3.5 h-3.5" />
                 </div>
-                <div>
-                  <span className="font-extrabold text-sm tracking-wide block uppercase">
-                    RECEIVED (આવેલું કામ / जमा)
-                  </span>
-                  <span className="text-[11px] text-emerald-200 block">
-                    When item received from artisan
-                  </span>
-                </div>
+                <span className="font-bold text-xs tracking-wider text-emerald-950 uppercase">
+                  {t('received_from_worker', 'RECEIVED FROM WORKER')}
+                </span>
               </div>
-              <Badge variant="success" size="sm" className="bg-emerald-700 text-white border-emerald-600">
-                {allReceivedItems.length} Entries
-              </Badge>
+              <span className="text-[11px] font-medium text-emerald-800 bg-emerald-100/70 px-2 py-0.5 rounded border border-emerald-200">
+                {allReceivedItems.length} {allReceivedItems.length === 1 ? t('entry_unit', 'Entry') : t('entries_unit', 'Entries')}
+              </span>
             </div>
 
             <div className="overflow-x-auto flex-1">
-              <table className="w-full text-left border-collapse text-xs">
+              <table className="w-full text-left border-collapse text-xs table-fixed">
                 <thead>
-                  <tr className="bg-emerald-100/80 border-b border-emerald-200 text-[11px] font-black text-emerald-950 uppercase tracking-wider">
-                    <th className="p-3">Date</th>
-                    <th className="p-3 text-center">No of Pcs</th>
-                    <th className="p-3 text-right">Amount (Auto-Calc)</th>
-                    <th className="p-3">Name of Design</th>
+                  <tr className="bg-emerald-50/40 border-b border-slate-200 text-[10px] sm:text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                    <th className="py-2.5 px-3 w-[22%]">{t('col_date', 'Date')}</th>
+                    <th className="py-2.5 px-3 text-center w-[18%]">{t('col_no_of_pcs', 'No. of Pcs')}</th>
+                    <th className="py-2.5 px-3 text-right w-[24%]">{t('col_amount', 'Amount')}</th>
+                    <th className="py-2.5 px-3 w-[36%]">{t('col_name_of_design', 'Name of Design')}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-emerald-100/90 font-medium">
+                <tbody className="divide-y divide-slate-100 font-normal">
                   {allReceivedItems.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="p-8 text-center text-slate-400 text-xs italic">
-                        No pieces received yet from artisan. Click "Receive Return" above to record returns.
+                      <td colSpan={4} className="py-8 px-4 text-center text-slate-400 text-xs italic">
+                        {t('no_received_returns', 'No received returns recorded yet.')}
                       </td>
                     </tr>
                   ) : (
                     allReceivedItems.map((item) => (
-                      <tr key={item.id} className="hover:bg-emerald-50/80 transition-colors">
-                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">
+                      <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-2.5 px-3 font-medium text-slate-700 whitespace-nowrap">
                           {formatIndianDate(item.date)}
                         </td>
-                        <td className="p-3 text-center">
-                          <span className="font-black text-emerald-800 text-xs bg-emerald-100 px-2.5 py-0.5 rounded-full inline-block border border-emerald-200">
-                            {item.pcs} pcs
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          <span className="font-semibold text-emerald-800 text-xs bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                            {item.pcs} {t('pcs_unit', 'pcs')}
                           </span>
                         </td>
-                        <td className="p-3 text-right font-black text-emerald-800 font-mono text-sm">
+                        <td className="py-2.5 px-3 text-right font-semibold text-slate-900 font-mono whitespace-nowrap">
                           {formatINR(item.amount)}
                         </td>
-                        <td className="p-3">
-                          <span className="font-extrabold text-slate-900 block">{item.design}</span>
-                          <span className="text-[10px] text-slate-400 font-mono">
-                            @{formatINR(item.rate)}/pc {item.returnCode ? `• ${item.returnCode}` : ''}
+                        <td className="py-2.5 px-3 truncate" title={item.design}>
+                          <span className="font-medium text-slate-900 block truncate">{translateEntityName(item.design, language)}</span>
+                          <span className="text-[10px] text-slate-400 font-mono block">
+                            @{formatINR(item.rate)}{t('per_piece_symbol', '/pc')}
                           </span>
                         </td>
                       </tr>
@@ -662,14 +655,12 @@ export const WorkerProfile: React.FC = () => {
               </table>
             </div>
 
-            {/* Left Side (Received) Totals Footer */}
-            <div className="bg-emerald-100 border-t-2 border-emerald-300 p-3 flex items-center justify-between text-xs font-black text-emerald-950">
-              <span className="uppercase tracking-wider">TOTAL RECEIVED:</span>
+            {/* Left Side (Received) Totals Footer - LEFT SIDE ONLY */}
+            <div className="bg-emerald-50/60 border-t border-emerald-200/80 px-4 py-2.5 flex items-center justify-between text-xs font-semibold text-slate-800">
+              <span className="uppercase tracking-wider text-[11px] font-bold text-emerald-950">{t('total_received', 'TOTAL RECEIVED')}</span>
               <div className="flex items-center gap-4">
-                <span className="bg-emerald-200/80 px-2.5 py-0.5 rounded-full text-emerald-900">
-                  {totalReceivedPcs} pcs
-                </span>
-                <span className="text-base font-black text-emerald-950 font-mono">
+                <span className="font-semibold text-slate-700">{totalReceivedPcs} {t('pcs_unit', 'pcs')}</span>
+                <span className="font-mono font-bold text-slate-900 text-sm">
                   {formatINR(totalReceivedAmount)}
                 </span>
               </div>
@@ -677,80 +668,76 @@ export const WorkerProfile: React.FC = () => {
           </div>
 
           {/* ======================================================== */}
-          {/* RIGHT SIDE: GIVEN (Work Issued to Artisan)               */}
-          {/* Format: Date | No of Pcs | Amount(auto) | Name of design*/}
+          {/* RIGHT SIDE: GIVEN TO WORKER                              */}
+          {/* Format: DATE | NO. OF PCS | AMOUNT | NAME OF DESIGN     */}
           {/* ======================================================== */}
-          <div className="flex flex-col bg-rose-50/20">
-            <div className="bg-rose-800 text-white px-4 py-3 flex items-center justify-between border-b border-rose-900">
+          <div className="flex flex-col bg-white">
+            {/* Section Header: Subtle Soft Pink / Rose */}
+            <div className="bg-rose-50/70 border-b border-rose-200/80 px-4 py-2.5 flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <div className="p-1.5 rounded-lg bg-rose-700 text-white">
-                  <ArrowDownLeft className="w-4 h-4" />
+                <div className="p-1 rounded-md bg-rose-100 text-rose-700">
+                  <ArrowDownLeft className="w-3.5 h-3.5" />
                 </div>
-                <div>
-                  <span className="font-extrabold text-sm tracking-wide block uppercase">
-                    GIVEN (આપેલું કામ / उधार)
-                  </span>
-                  <span className="text-[11px] text-rose-200 block">
-                    When item given to artisan
-                  </span>
-                </div>
+                <span className="font-bold text-xs tracking-wider text-rose-950 uppercase">
+                  {t('given_to_worker', 'GIVEN TO WORKER')}
+                </span>
               </div>
-              <Badge variant="danger" size="sm" className="bg-rose-700 text-white border-rose-600">
-                {allGivenItems.length} Batches
-              </Badge>
+              <span className="text-[11px] font-medium text-rose-800 bg-rose-100/70 px-2 py-0.5 rounded border border-rose-200">
+                {allGivenItems.length} {allGivenItems.length === 1 ? t('batch_unit', 'Batch') : t('batches_unit', 'Batches')}
+              </span>
             </div>
 
             <div className="overflow-x-auto flex-1">
-              <table className="w-full text-left border-collapse text-xs">
+              <table className="w-full text-left border-collapse text-xs table-fixed">
                 <thead>
-                  <tr className="bg-rose-100/80 border-b border-rose-200 text-[11px] font-black text-rose-950 uppercase tracking-wider">
-                    <th className="p-3">Date</th>
-                    <th className="p-3 text-center">No of Pcs</th>
-                    <th className="p-3 text-right">Amount (Auto-Calc)</th>
-                    <th className="p-3">Name of Design</th>
+                  <tr className="bg-rose-50/40 border-b border-slate-200 text-[10px] sm:text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                    <th className="py-2.5 px-3 w-[22%]">{t('col_date', 'Date')}</th>
+                    <th className="py-2.5 px-3 text-center w-[18%]">{t('col_no_of_pcs', 'No. of Pcs')}</th>
+                    <th className="py-2.5 px-3 text-right w-[24%]">{t('col_amount', 'Amount')}</th>
+                    <th className="py-2.5 px-3 w-[36%]">{t('col_name_of_design', 'Name of Design')}</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-rose-100/90 font-medium">
+                <tbody className="divide-y divide-slate-100 font-normal">
                   {allGivenItems.length === 0 ? (
                     <tr>
-                      <td colSpan={4} className="p-8 text-center text-slate-400 text-xs italic">
-                        No items given yet to artisan. Click "+ Give Work" above to assign fabric.
+                      <td colSpan={4} className="py-8 px-4 text-center text-slate-400 text-xs italic">
+                        {t('no_given_items', 'No given items recorded yet.')}
                       </td>
                     </tr>
                   ) : (
                     allGivenItems.map((item) => (
-                      <tr key={item.id} className="hover:bg-rose-50/80 transition-colors">
-                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">
+                      <tr key={item.id} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-2.5 px-3 font-medium text-slate-700 whitespace-nowrap">
                           {formatIndianDate(item.date)}
                         </td>
-                        <td className="p-3 text-center">
-                          <span className="font-black text-rose-800 text-xs bg-rose-100 px-2.5 py-0.5 rounded-full inline-block border border-rose-200">
-                            {item.pcs} pcs
+                        <td className="py-2.5 px-3 text-center whitespace-nowrap">
+                          <span className="font-semibold text-rose-800 text-xs bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                            {item.pcs} {t('pcs_unit', 'pcs')}
                           </span>
                           {item.pendingPcs > 0 && (
-                            <span className="text-[10px] text-amber-800 font-extrabold mt-0.5 block">
-                              ({item.pendingPcs} pending)
+                            <span className="text-[10px] text-amber-700 font-semibold mt-0.5 block">
+                              ({item.pendingPcs} {t('pending_badge', 'pending')})
                             </span>
                           )}
                         </td>
-                        <td className="p-3 text-right font-black text-rose-800 font-mono text-sm">
+                        <td className="py-2.5 px-3 text-right font-semibold text-slate-900 font-mono whitespace-nowrap">
                           {formatINR(item.amount)}
                         </td>
-                        <td className="p-3">
-                          <div className="flex items-center justify-between gap-2">
-                            <div>
-                              <span className="font-extrabold text-slate-900 block">{item.design}</span>
-                              <span className="text-[10px] text-slate-400 font-mono">
-                                @{formatINR(item.rate)}/pc • {item.batchCode}
+                        <td className="py-2.5 px-3">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <div className="truncate">
+                              <span className="font-medium text-slate-900 block truncate" title={item.design}>{translateEntityName(item.design, language)}</span>
+                              <span className="text-[10px] text-slate-400 font-mono block">
+                                @{formatINR(item.rate)}{t('per_piece_symbol', '/pc')} • {item.batchCode}
                               </span>
                             </div>
                             {item.pendingPcs > 0 && (
                               <button
                                 onClick={() => handleOpenReceiveModal(item.distObj)}
-                                className="px-2 py-1 text-[11px] font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 rounded-md transition-colors shrink-0 border border-emerald-300"
+                                className="px-2 py-0.5 text-[10px] font-medium text-emerald-800 bg-emerald-50 hover:bg-emerald-100 rounded border border-emerald-200 transition-colors shrink-0"
                                 title="Receive knots for this batch"
                               >
-                                Receive
+                                {t('receive_btn', 'Receive')}
                               </button>
                             )}
                           </div>
@@ -762,51 +749,8 @@ export const WorkerProfile: React.FC = () => {
               </table>
             </div>
 
-            {/* Right Side (Given) Totals Footer */}
-            <div className="bg-rose-100 border-t-2 border-rose-300 p-3 flex items-center justify-between text-xs font-black text-rose-950">
-              <span className="uppercase tracking-wider">TOTAL GIVEN:</span>
-              <div className="flex items-center gap-4">
-                <span className="bg-rose-200/80 px-2.5 py-0.5 rounded-full text-rose-900">
-                  {totalGivenPcs} pcs
-                </span>
-                <span className="text-base font-black text-rose-950 font-mono">
-                  {formatINR(totalGivenAmount)}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* NET RECONCILIATION SUMMARY BAR */}
-        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 via-slate-50 to-emerald-50 border border-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-900 flex items-center justify-center font-bold shrink-0">
-              <Package className="w-5 h-5" />
-            </div>
-            <div>
-              <p className="font-bold text-slate-800 text-sm">
-                Net Pending Material with Artisan:{' '}
-                <span className="text-amber-900 font-black">{netPendingPcs} Pieces</span>
-              </p>
-              <p className="text-slate-500 text-[11px] mt-0.5">
-                Formula: Total Given ({totalGivenPcs} pcs) − Total Received ({totalReceivedPcs} pcs) = {netPendingPcs} pcs remaining
-              </p>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-6 sm:self-center border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-200">
-            <div>
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Work Value Given</span>
-              <span className="font-mono font-bold text-rose-800 text-sm">{formatINR(totalGivenAmount)}</span>
-            </div>
-            <div>
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Wages Earned (Received)</span>
-              <span className="font-mono font-bold text-emerald-800 text-sm">{formatINR(totalReceivedAmount)}</span>
-            </div>
-            <div>
-              <span className="text-[10px] uppercase font-bold text-slate-400 block">Payable Balance</span>
-              <span className="font-mono font-extrabold text-brand-700 text-base">{formatINR(worker.payable_balance)}</span>
-            </div>
+            {/* Right Side bottom area - Clean without duplicate total footer */}
+            <div className="border-t border-slate-100 px-4 py-2.5 min-h-[41px] bg-slate-50/20" />
           </div>
         </div>
 
@@ -816,39 +760,39 @@ export const WorkerProfile: React.FC = () => {
             <div>
               <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
                 <IndianRupee className="w-4 h-4 text-emerald-600" />
-                Payments & Cash Advances Ledger
+                {t('payments_advances_ledger', 'Payments & Cash Advances Ledger')}
               </h3>
               <p className="text-[11px] text-slate-500">
-                Wage payments disbursed and cash/UPI advances given to {worker.full_name}.
+                {t('payments_advances_desc', 'Wage payments disbursed and cash/UPI advances given')} ({translateEntityName(worker.full_name, language)}).
               </p>
             </div>
             <Button
               variant="outline"
               size="sm"
               icon={<Plus className="w-3.5 h-3.5" />}
-              onClick={() => setIsPaymentOpen(true)}
+              onClick={handleOpenPaymentModal}
               className="font-bold text-xs self-start sm:self-auto"
             >
-              + Record Payment / Advance
+              {t('record_payment_advance_btn', '+ Record Payment / Advance')}
             </Button>
           </div>
 
           {payments.length === 0 ? (
             <div className="p-6 text-center text-slate-400 text-xs italic bg-slate-50 rounded-xl border border-slate-200">
-              No payments recorded yet for this artisan.
+              {t('no_payments_recorded', 'No payments recorded yet for this artisan.')}
             </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-200">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase">
-                    <th className="p-3">Payment Date</th>
-                    <th className="p-3">Category</th>
-                    <th className="p-3 text-right">Amount</th>
-                    <th className="p-3">Mode</th>
-                    <th className="p-3">Receipt / Ref No</th>
-                    <th className="p-3">Authorized By</th>
-                    <th className="p-3">Notes</th>
+                    <th className="p-3">{t('col_payment_date', 'Payment Date')}</th>
+                    <th className="p-3">{t('col_category', 'Category')}</th>
+                    <th className="p-3 text-right">{t('col_amount', 'Amount')}</th>
+                    <th className="p-3">{t('col_mode', 'Mode')}</th>
+                    <th className="p-3">{t('col_receipt_ref', 'Receipt / Ref No')}</th>
+                    <th className="p-3">{t('col_authorized_by', 'Authorized By')}</th>
+                    <th className="p-3">{t('col_notes', 'Notes')}</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
@@ -860,119 +804,32 @@ export const WorkerProfile: React.FC = () => {
                           variant={p.payment_type === 'Wage Payout' ? 'success' : 'warning'}
                           size="sm"
                         >
-                          {p.payment_type}
+                          {p.payment_type === 'Wage Payout'
+                            ? t('wage_payout', 'Wage Payout')
+                            : p.payment_type === 'Advance Given'
+                            ? t('cash_advance', 'Advance Given')
+                            : t('bonus', 'Bonus')}
                         </Badge>
                       </td>
                       <td className="p-3 text-right font-extrabold text-emerald-700 text-sm font-mono">
                         {formatINR(p.amount)}
                       </td>
-                      <td className="p-3 text-slate-700 font-bold">{p.payment_mode}</td>
-                      <td className="p-3 font-mono text-slate-500 text-[11px]">{p.reference_no || 'Cash Ledger'}</td>
-                      <td className="p-3 text-slate-600">{p.disbursed_by_name}</td>
+                      <td className="p-3 text-slate-700 font-bold">
+                        {p.payment_mode === 'Cash'
+                          ? t('cash', 'Cash')
+                          : p.payment_mode === 'Bank Transfer'
+                          ? t('bank_transfer', 'Bank Transfer')
+                          : t('upi', 'UPI')}
+                      </td>
+                      <td className="p-3 font-mono text-slate-500 text-[11px]">
+                        {p.reference_no || t('cash_ledger', 'Cash Ledger')}
+                      </td>
+                      <td className="p-3 text-slate-600">{translateEntityName(p.disbursed_by_name, language)}</td>
                       <td className="p-3 text-slate-400 truncate max-w-xs">{p.notes || '—'}</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-          )}
-        </div>
-
-        {/* INTEGRATED SECTION 3: RECENT ACTIVITY TIMELINE */}
-        <div className="pt-4 border-t border-slate-200 space-y-3">
-          <div>
-            <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
-              <History className="w-4 h-4 text-brand-600" />
-              Chronological Audit Trail
-            </h3>
-            <p className="text-[11px] text-slate-500">
-              Unified chronological timeline of work dispatches, returns, and cash disbursements.
-            </p>
-          </div>
-
-          {timeline.length === 0 ? (
-            <div className="p-6 text-center text-slate-400 text-xs italic bg-slate-50 rounded-xl border border-slate-200">
-              No activity logged yet.
-            </div>
-          ) : (
-            <div className="space-y-2.5">
-              {timeline.map((item) => {
-                const isIssued = item.category === 'WORK_ISSUED';
-                const isReturned = item.category === 'WORK_RETURNED';
-                const isRemaining = isReturned && item.remaining_quantity === 0;
-                const isPayment = item.category === 'PAYMENT_DISBURSED';
-                const isAdvance = item.category === 'ADVANCE_GIVEN';
-
-                return (
-                  <div
-                    key={item.id}
-                    className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/70 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div
-                        className={`p-2 rounded-xl shrink-0 ${
-                          isIssued
-                            ? 'bg-rose-50 text-rose-600'
-                            : isRemaining
-                            ? 'bg-emerald-600 text-white'
-                            : isReturned
-                            ? 'bg-emerald-50 text-emerald-600'
-                            : isAdvance
-                            ? 'bg-amber-50 text-amber-600'
-                            : 'bg-blue-50 text-blue-600'
-                        }`}
-                      >
-                        {isIssued && <ArrowDownLeft className="w-3.5 h-3.5" />}
-                        {isReturned && (isRemaining ? <CheckCircle2 className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />)}
-                        {(isPayment || isAdvance) && <IndianRupee className="w-3.5 h-3.5" />}
-                        {!isIssued && !isReturned && !isPayment && !isAdvance && <Clock className="w-3.5 h-3.5" />}
-                      </div>
-                      <div>
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-slate-800 text-xs sm:text-sm">{item.title}</span>
-                          <Badge
-                            variant={
-                              isIssued
-                                ? 'danger'
-                                : isRemaining
-                                ? 'success'
-                                : isReturned
-                                ? 'success'
-                                : isAdvance
-                                ? 'warning'
-                                : 'neutral'
-                            }
-                            size="sm"
-                          >
-                            {item.status_badge}
-                          </Badge>
-                        </div>
-                        <p className="text-slate-500 text-[11px] mt-0.5">{item.description}</p>
-                      </div>
-                    </div>
-                    <div className="text-right shrink-0 sm:self-center">
-                      <span className="text-[11px] font-semibold text-slate-400 block">
-                        {formatIndianDate(item.date)}
-                      </span>
-                      {item.amount && (
-                        <p
-                          className={`font-bold text-xs mt-0.5 font-mono ${
-                            isIssued
-                              ? 'text-slate-700'
-                              : isReturned
-                              ? 'text-emerald-700'
-                              : isAdvance
-                              ? 'text-amber-700'
-                              : 'text-blue-700'
-                          }`}
-                        >
-                          {formatINR(item.amount)}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
             </div>
           )}
         </div>
@@ -990,10 +847,10 @@ export const WorkerProfile: React.FC = () => {
                 </div>
                 <div>
                   <h2 className="text-lg sm:text-xl font-bold text-slate-900">
-                    Give Work / Material Distribution Form
+                    {t('give_work_modal_title', 'Give Work / Material Distribution Form')}
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Dispatches raw cloth & tying thread. Automatically generates unique Distribution ID & snapshots piece price.
+                    {t('give_work_modal_desc', 'Dispatches raw cloth & tying thread. Automatically generates unique Distribution ID & snapshots piece price.')}
                   </p>
                 </div>
               </div>
@@ -1010,7 +867,7 @@ export const WorkerProfile: React.FC = () => {
               {/* 1. Date Picker (defaults today in IST) */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Issue Date (IST) <span className="text-rose-500">*</span>
+                  {t('issue_date_label', 'Issue Date (IST)')} <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <Calendar className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -1027,7 +884,7 @@ export const WorkerProfile: React.FC = () => {
               {/* 2. Worker Card */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Select Woman Artisan Worker <span className="text-rose-500">*</span>
+                  {t('select_artisan_label', 'Select Woman Artisan Worker')} <span className="text-rose-500">*</span>
                 </label>
                 <div className="p-3.5 bg-brand-50/60 border border-brand-200 rounded-2xl flex items-center justify-between">
                   <div className="flex items-center gap-3">
@@ -1035,14 +892,14 @@ export const WorkerProfile: React.FC = () => {
                       {worker.full_name.charAt(0)}
                     </div>
                     <div>
-                      <div className="font-bold text-slate-900 text-sm">{worker.full_name}</div>
+                      <div className="font-bold text-slate-900 text-sm">{translateEntityName(worker.full_name, language)}</div>
                       <div className="text-xs text-slate-500">
-                        Serial: <span className="font-mono font-semibold">{worker.serial_number}</span> • Town: {worker.town || worker.village || 'Kutch'}
+                        {t('serial_label', 'Serial')}: <span className="font-mono font-semibold">{worker.serial_number}</span> • {t('town_label', 'Town')}: {translateEntityName(worker.town || worker.village || 'Kutch', language)}
                       </div>
                     </div>
                   </div>
                   <span className="text-xs font-semibold text-brand-700 bg-white px-2.5 py-1 rounded-lg border border-brand-200">
-                    Active Artisan
+                    {t('active_artisan', 'Active Artisan')}
                   </span>
                 </div>
               </div>
@@ -1050,7 +907,7 @@ export const WorkerProfile: React.FC = () => {
               {/* 3. Searchable Item Dropdown & Snapshot Price */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Item / Design Selection <span className="text-rose-500">*</span>
+                  {t('item_design_selection', 'Item / Design Selection')} <span className="text-rose-500">*</span>
                 </label>
                 <ItemSearchSelect
                   value={selectedItem?.id || null}
@@ -1063,7 +920,7 @@ export const WorkerProfile: React.FC = () => {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Number of Pieces Given <span className="text-rose-500">*</span>
+                    {t('num_pieces_given_label', 'Number of Pieces Given')} <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -1078,11 +935,11 @@ export const WorkerProfile: React.FC = () => {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Total Work Value (Auto-Calculated)
+                    {t('total_work_value_label', 'Total Work Value (Auto-Calculated)')}
                   </label>
                   <div className="px-4 py-2.5 bg-slate-100/80 border border-slate-200 rounded-xl flex items-center justify-between">
                     <span className="text-xs text-slate-500">
-                      {numPieces} pcs × {formatINR(unitPrice, true)}
+                      {numPieces} {t('pcs_unit', 'pcs')} × {formatINR(unitPrice, true)}
                     </span>
                     <span className="text-lg font-black text-slate-900">
                       {formatINR(totalWorkValue)}
@@ -1091,26 +948,10 @@ export const WorkerProfile: React.FC = () => {
                 </div>
               </div>
 
-              {/* 5. Estimated Due Date */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Estimated Due Date
-                </label>
-                <div className="relative">
-                  <Calendar className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
-                  <input
-                    type="date"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 font-medium"
-                  />
-                </div>
-              </div>
-
               {/* 6. Remarks / Notes */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Remarks / Notes
+                  {t('remarks_notes_label', 'Remarks / Notes')}
                 </label>
                 <textarea
                   rows={2}
@@ -1125,7 +966,7 @@ export const WorkerProfile: React.FC = () => {
               <div className="p-3 bg-amber-50 rounded-xl border border-amber-200/80 flex items-start gap-2.5 text-amber-900 text-xs">
                 <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
                 <span>
-                  <strong>Historical Price Protection:</strong> The current catalogue rate ({formatINR(unitPrice, true)}/pc) will be permanently locked into this transaction. Multiple consignments can be assigned to this worker today.
+                  <strong>{t('price_protection_title', 'Historical Price Protection:')}</strong> {t('price_protection_desc', 'The current catalogue rate will be permanently locked into this transaction. Multiple consignments can be assigned to this worker today.')}
                 </span>
               </div>
 
@@ -1137,7 +978,7 @@ export const WorkerProfile: React.FC = () => {
                   disabled={isSubmittingWork}
                   className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-semibold transition-colors"
                 >
-                  Cancel
+                  {t('cancel', 'Cancel')}
                 </button>
                 <button
                   type="submit"
@@ -1145,7 +986,7 @@ export const WorkerProfile: React.FC = () => {
                   className="py-3 px-6 bg-brand-600 hover:bg-brand-700 active:scale-[0.99] text-white font-bold rounded-2xl shadow-md shadow-brand-500/20 transition-all text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <ArrowDownLeft className="w-5 h-5" />
-                  <span>{isSubmittingWork ? 'Issuing Consignment...' : 'Dispatch Consignment (Debit Material)'}</span>
+                  <span>{isSubmittingWork ? t('issuing_consignment', 'Issuing Consignment...') : t('dispatch_consignment_btn', 'Dispatch Consignment (Debit Material)')}</span>
                 </button>
               </div>
             </form>
@@ -1165,10 +1006,10 @@ export const WorkerProfile: React.FC = () => {
                 </div>
                 <div>
                   <h2 className="text-lg font-bold text-slate-900">
-                    Receive Work Return
+                    {t('receive_return_modal_title', 'Receive Work Return')}
                   </h2>
                   <p className="text-xs text-slate-500">
-                    Batch: <span className="font-mono font-bold text-slate-700">{selectedDistForReturn.batch_code}</span> • {selectedDistForReturn.item_name_snapshot}
+                    {t('batch_label', 'Batch')}: <span className="font-mono font-bold text-slate-700">{selectedDistForReturn.batch_code}</span> • {translateEntityName(selectedDistForReturn.item_name_snapshot, language)}
                   </p>
                 </div>
               </div>
@@ -1185,23 +1026,23 @@ export const WorkerProfile: React.FC = () => {
               {/* Batch Summary */}
               <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-200 grid grid-cols-3 gap-2 text-center text-xs">
                 <div>
-                  <p className="text-slate-400 font-semibold uppercase text-[10px]">Issued</p>
-                  <p className="font-bold text-slate-800 text-sm mt-0.5">{selectedDistForReturn.quantity_issued} pcs</p>
+                  <p className="text-slate-400 font-semibold uppercase text-[10px]">{t('issued_label', 'Issued')}</p>
+                  <p className="font-bold text-slate-800 text-sm mt-0.5">{selectedDistForReturn.quantity_issued} {t('pcs_unit', 'pcs')}</p>
                 </div>
                 <div>
-                  <p className="text-slate-400 font-semibold uppercase text-[10px]">Pending</p>
-                  <p className="font-bold text-amber-700 text-sm mt-0.5">{selectedDistForReturn.quantity_pending} pcs</p>
+                  <p className="text-slate-400 font-semibold uppercase text-[10px]">{t('pending_label', 'Pending')}</p>
+                  <p className="font-bold text-amber-700 text-sm mt-0.5">{selectedDistForReturn.quantity_pending} {t('pcs_unit', 'pcs')}</p>
                 </div>
                 <div>
-                  <p className="text-slate-400 font-semibold uppercase text-[10px]">Piece Rate</p>
-                  <p className="font-bold text-slate-800 text-sm mt-0.5">₹{selectedDistForReturn.rate_per_piece}/pc</p>
+                  <p className="text-slate-400 font-semibold uppercase text-[10px]">{t('piece_rate_label', 'Piece Rate')}</p>
+                  <p className="font-bold text-slate-800 text-sm mt-0.5">₹{selectedDistForReturn.rate_per_piece}{t('per_piece_symbol', '/pc')}</p>
                 </div>
               </div>
 
               {/* Return Date */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Return Date (IST) <span className="text-rose-500">*</span>
+                  {t('return_date_label', 'Return Date (IST)')} <span className="text-rose-500">*</span>
                 </label>
                 <div className="relative">
                   <Calendar className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
@@ -1219,7 +1060,7 @@ export const WorkerProfile: React.FC = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-emerald-800 uppercase tracking-wider mb-1.5">
-                    Accepted Pieces <span className="text-rose-500">*</span>
+                    {t('accepted_pieces_label', 'Accepted Pieces')} <span className="text-rose-500">*</span>
                   </label>
                   <input
                     type="number"
@@ -1230,12 +1071,12 @@ export const WorkerProfile: React.FC = () => {
                     onChange={(e) => setReturnQtyAccepted(e.target.value === '' ? '' : parseInt(e.target.value))}
                     className="w-full px-3.5 py-2.5 bg-emerald-50/50 border border-emerald-300 rounded-xl text-base font-bold text-emerald-900 focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
                   />
-                  <p className="text-[11px] text-emerald-600 mt-1">Generates artisan wage</p>
+                  <p className="text-[11px] text-emerald-600 mt-1">{t('generates_wage_note', 'Generates artisan wage')}</p>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-amber-800 uppercase tracking-wider mb-1.5">
-                    Rejected / QC Defect
+                    {t('rejected_pieces_label', 'Rejected / QC Defect')}
                   </label>
                   <input
                     type="number"
@@ -1245,17 +1086,17 @@ export const WorkerProfile: React.FC = () => {
                     onChange={(e) => setReturnQtyRejected(e.target.value === '' ? '' : parseInt(e.target.value))}
                     className="w-full px-3.5 py-2.5 bg-amber-50/50 border border-amber-300 rounded-xl text-base font-bold text-amber-900 focus:ring-2 focus:ring-amber-500/20 focus:border-amber-500"
                   />
-                  <p className="text-[11px] text-amber-600 mt-1">₹0.00 wage credited</p>
+                  <p className="text-[11px] text-amber-600 mt-1">{t('zero_wage_note', '₹0.00 wage credited')}</p>
                 </div>
               </div>
 
               {/* Earned Wage Preview */}
               <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex items-center justify-between text-xs">
                 <span className="font-semibold text-emerald-800">
-                  Artisan Earned Wage:
+                  {t('artisan_earned_wage_label', 'Artisan Earned Wage:')}
                 </span>
                 <span className="text-base font-black text-emerald-900">
-                  {typeof returnQtyAccepted === 'number' ? returnQtyAccepted : 0} pcs × ₹{selectedDistForReturn.rate_per_piece} = {formatINR((typeof returnQtyAccepted === 'number' ? returnQtyAccepted : 0) * selectedDistForReturn.rate_per_piece)}
+                  {typeof returnQtyAccepted === 'number' ? returnQtyAccepted : 0} {t('pcs_unit', 'pcs')} × ₹{selectedDistForReturn.rate_per_piece} = {formatINR((typeof returnQtyAccepted === 'number' ? returnQtyAccepted : 0) * selectedDistForReturn.rate_per_piece)}
                 </span>
               </div>
 
@@ -1263,20 +1104,20 @@ export const WorkerProfile: React.FC = () => {
               {(typeof returnQtyRejected === 'number' && returnQtyRejected > 0) && (
                 <div>
                   <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Defect / Rejection Reason
+                    {t('defect_reason_label', 'Defect / Rejection Reason')}
                   </label>
                   <select
                     value={rejectionReason}
                     onChange={(e) => setRejectionReason(e.target.value)}
                     className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-medium"
                   >
-                    <option value="Broken Knots / Missing Knots">Broken Knots / Missing Knots</option>
-                    <option value="Fabric Torn / Needle Punched">Fabric Torn / Needle Punched</option>
-                    <option value="Uneven / Irregular Knots">Uneven / Irregular Knots</option>
-                    <option value="Stains / Dye Bleed / Discoloration">Stains / Dye Bleed / Discoloration</option>
-                    <option value="Pattern / Design Mismatch">Pattern / Design Mismatch</option>
-                    <option value="Loose Knotting (Unraveling)">Loose Knotting (Unraveling)</option>
-                    <option value="Other Defect">Other Defect</option>
+                    <option value="Broken Knots / Missing Knots">{t('defect_broken_knots', 'Broken Knots / Missing Knots')}</option>
+                    <option value="Fabric Torn / Needle Punched">{t('defect_torn_fabric', 'Fabric Torn / Needle Punched')}</option>
+                    <option value="Uneven / Irregular Knots">{t('defect_uneven_knots', 'Uneven / Irregular Knots')}</option>
+                    <option value="Stains / Dye Bleed / Discoloration">{t('defect_stains', 'Stains / Dye Bleed / Discoloration')}</option>
+                    <option value="Pattern / Design Mismatch">{t('defect_mismatch', 'Pattern / Design Mismatch')}</option>
+                    <option value="Loose Knotting (Unraveling)">{t('defect_loose', 'Loose Knotting (Unraveling)')}</option>
+                    <option value="Other Defect">{t('defect_other', 'Other Defect')}</option>
                   </select>
                 </div>
               )}
@@ -1284,7 +1125,7 @@ export const WorkerProfile: React.FC = () => {
               {/* Remarks */}
               <div>
                 <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                  Remarks / Notes
+                  {t('remarks_notes_label', 'Remarks / Notes')}
                 </label>
                 <textarea
                   rows={2}
@@ -1303,7 +1144,7 @@ export const WorkerProfile: React.FC = () => {
                   disabled={isSubmittingReturn}
                   className="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-sm font-semibold transition-colors"
                 >
-                  Cancel
+                  {t('cancel', 'Cancel')}
                 </button>
                 <button
                   type="submit"
@@ -1311,7 +1152,7 @@ export const WorkerProfile: React.FC = () => {
                   className="py-3 px-6 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white font-bold rounded-2xl shadow-md shadow-emerald-500/20 transition-all text-sm flex items-center justify-center gap-2 disabled:opacity-50"
                 >
                   <ArrowUpRight className="w-5 h-5" />
-                  <span>{isSubmittingReturn ? 'Recording Return...' : 'Record Return & Credit Balance'}</span>
+                  <span>{isSubmittingReturn ? t('recording_return', 'Recording Return...') : t('record_return_btn', 'Record Return & Credit Balance')}</span>
                 </button>
               </div>
             </form>
@@ -1325,54 +1166,63 @@ export const WorkerProfile: React.FC = () => {
           <div className="w-full max-w-md bg-white rounded-2xl shadow-2xl p-6 space-y-4">
             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <IndianRupee className="w-5 h-5 text-emerald-600" />
-              Record Wage Payout / Advance
+              {t('record_payment_modal_title', 'Record Wage Payout / Advance')}
             </h3>
 
             <form onSubmit={handleRecordPayment} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700">Payment Category</label>
+                <label className="block text-xs font-semibold text-slate-700">
+                  {t('payment_type_label', 'Payment Category')}
+                </label>
                 <select
                   value={paymentType}
                   onChange={(e) => setPaymentType(e.target.value)}
                   className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm font-medium"
                 >
-                  <option value="Wage Payout">Wage Payout (Deducts from Payable Balance)</option>
-                  <option value="Advance Given">Cash Advance (Deducts from Payable Balance)</option>
-                  <option value="Bonus">Artisan Festival Bonus (Adds to Balance)</option>
+                  <option value="Wage Payout">{t('wage_payout_option', 'Wage Payout (Deducts from Payable Balance)')}</option>
+                  <option value="Advance Given">{t('cash_advance_option', 'Cash Advance (Deducts from Payable Balance)')}</option>
+                  <option value="Bonus">{t('bonus_option', 'Artisan Festival Bonus (Adds to Balance)')}</option>
                 </select>
               </div>
 
-              <Input
-                label="Amount (₹) *"
-                type="number"
-                min="1"
-                required
-                value={paymentAmount}
-                onChange={(e) => setPaymentAmount(Number(e.target.value))}
-              />
+              <div>
+                <Input
+                  label={`${t('payment_amount_label', 'Amount (₹)')} *`}
+                  type="number"
+                  min="1"
+                  required
+                  value={paymentAmount}
+                  onChange={(e) => setPaymentAmount(e.target.value === '' ? '' : Number(e.target.value))}
+                />
+                <p className="text-[11px] text-slate-500 mt-1">
+                  {t('default_net_balance_note', 'Default set to current net payable balance:')} <span className="font-semibold text-brand-700">{formatINR(netPayableBalance)}</span>
+                </p>
+              </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700">Payment Mode</label>
+                <label className="block text-xs font-semibold text-slate-700">
+                  {t('payment_mode_label', 'Payment Mode')}
+                </label>
                 <select
                   value={paymentMode}
                   onChange={(e) => setPaymentMode(e.target.value)}
                   className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm font-medium"
                 >
-                  <option value="Cash">Cash at Workshop</option>
-                  <option value="Bank Transfer">Bank Transfer (IMPS/NEFT)</option>
-                  <option value="UPI">UPI / Google Pay</option>
+                  <option value="Cash">{t('cash_at_workshop', 'Cash at Workshop')}</option>
+                  <option value="Bank Transfer">{t('bank_transfer_option', 'Bank Transfer (IMPS/NEFT)')}</option>
+                  <option value="UPI">{t('upi_option', 'UPI / Google Pay')}</option>
                 </select>
               </div>
 
               <Input
-                label="Receipt / Reference No. (Optional)"
+                label={t('receipt_ref_label', 'Receipt / Reference No. (Optional)')}
                 value={refNo}
                 onChange={(e) => setRefNo(e.target.value)}
                 placeholder="e.g. CASH-REC-2026-89 or UPI UTR"
               />
 
               <Input
-                label="Notes / Purpose"
+                label={t('notes_purpose_label', 'Notes / Purpose')}
                 value={payNotes}
                 onChange={(e) => setPayNotes(e.target.value)}
                 placeholder="e.g. Cleared payment for Batches 089 and 090"
@@ -1385,10 +1235,10 @@ export const WorkerProfile: React.FC = () => {
                   onClick={() => setIsPaymentOpen(false)}
                   disabled={isSubmittingPayment}
                 >
-                  Cancel
+                  {t('cancel', 'Cancel')}
                 </Button>
                 <Button type="submit" variant="primary" isLoading={isSubmittingPayment}>
-                  Confirm Payment
+                  {t('confirm_payment_btn', 'Confirm Payment')}
                 </Button>
               </div>
             </form>
@@ -1400,23 +1250,23 @@ export const WorkerProfile: React.FC = () => {
       {isEditOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-fade-in">
           <div className="w-full max-w-lg bg-white rounded-2xl shadow-2xl p-6 space-y-4">
-            <h3 className="text-lg font-bold text-slate-900">Edit Artisan Information</h3>
+            <h3 className="text-lg font-bold text-slate-900">{t('edit_artisan_details_title', 'Edit Artisan Details')}</h3>
             <form onSubmit={handleUpdateProfile} className="space-y-3">
               <Input
-                label="Full Name *"
+                label={`${t('full_name', 'Full Name')} *`}
                 required
                 value={editName}
                 onChange={(e) => setEditName(e.target.value)}
               />
               <div className="grid grid-cols-2 gap-3">
                 <Input
-                  label="Mobile Number *"
+                  label={`${t('mobile_number', 'Mobile Number')} *`}
                   required
                   value={editPhone}
                   onChange={(e) => setEditPhone(e.target.value)}
                 />
                 <Input
-                  label="Town *"
+                  label={`${t('town_city', 'Town / Village')} *`}
                   required
                   value={editTown}
                   onChange={(e) => setEditTown(e.target.value)}
@@ -1424,7 +1274,7 @@ export const WorkerProfile: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700">Address</label>
+                <label className="block text-xs font-semibold text-slate-700">{t('address', 'Address / Street')}</label>
                 <textarea
                   rows={2}
                   value={editAddress}
@@ -1435,19 +1285,19 @@ export const WorkerProfile: React.FC = () => {
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700">Status</label>
+                <label className="block text-xs font-semibold text-slate-700">{t('status_label', 'Status')}</label>
                 <select
                   value={editStatus}
                   onChange={(e) => setEditStatus(e.target.value)}
                   className="w-full p-2.5 rounded-xl border border-slate-300 bg-white text-xs sm:text-sm font-medium"
                 >
-                  <option value="Active">Active</option>
-                  <option value="Inactive">Inactive</option>
+                  <option value="Active">{t('active', 'Active')}</option>
+                  <option value="Inactive">{t('inactive', 'Inactive')}</option>
                 </select>
               </div>
 
               <div className="space-y-1.5">
-                <label className="block text-xs font-semibold text-slate-700">Specialization / Remarks</label>
+                <label className="block text-xs font-semibold text-slate-700">{t('specialization_remarks_label', 'Specialization / Remarks')}</label>
                 <textarea
                   rows={2}
                   value={editRemarks}
@@ -1459,10 +1309,10 @@ export const WorkerProfile: React.FC = () => {
 
               <div className="flex justify-end gap-2 pt-2 border-t">
                 <Button type="button" variant="outline" onClick={() => setIsEditOpen(false)}>
-                  Cancel
+                  {t('cancel', 'Cancel')}
                 </Button>
                 <Button type="submit" variant="primary">
-                  Save Changes
+                  {t('save_changes', 'Save Changes')}
                 </Button>
               </div>
             </form>

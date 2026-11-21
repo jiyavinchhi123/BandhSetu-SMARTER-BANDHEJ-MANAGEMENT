@@ -71,10 +71,28 @@ def get_worker_profile(
     current_user: User = Depends(require_manager_or_admin),
     db: Session = Depends(get_db)
 ):
-    """Retrieves worker profile with pending quantities and payable balance."""
+    """Retrieves worker profile with pending quantities and payable balance reconciled from ledger."""
     worker = db.query(Worker).filter(Worker.id == worker_id).first()
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found.")
+
+    from app.models.work_return import WorkReturn
+    from app.models.payment_record import PaymentRecord
+    from app.models.work_distribution import WorkDistribution
+
+    total_earned = sum(float(r.completed_work_value or 0) for r in db.query(WorkReturn).filter(WorkReturn.worker_id == worker.id).all())
+    total_paid = sum(float(p.amount or 0) for p in db.query(PaymentRecord).filter(
+        PaymentRecord.worker_id == worker.id,
+        PaymentRecord.payment_type.in_(["Wage Payout", "Advance Given"])
+    ).all())
+    pending_pcs = sum(int(d.quantity_pending or 0) for d in db.query(WorkDistribution).filter(WorkDistribution.worker_id == worker.id).all())
+
+    worker.total_earned = round(total_earned, 2)
+    worker.payable_balance = round(max(0.0, total_earned - total_paid), 2)
+    worker.pending_pieces = pending_pcs
+    db.commit()
+    db.refresh(worker)
+
     return worker
 
 

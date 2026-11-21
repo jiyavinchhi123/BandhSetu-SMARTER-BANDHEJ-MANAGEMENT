@@ -4,9 +4,8 @@ export const APP_TAGLINE = "Smarter Bandhej Management";
 export const NAVIGATION_ITEMS = [
   { name: 'Dashboard', path: '/', icon: 'LayoutDashboard' },
   { name: 'Artisan Workers', path: '/workers', icon: 'Users' },
-  { name: 'Work Batches', path: '/batches', icon: 'Layers' },
-  { name: 'Payments & Wages', path: '/payments', icon: 'IndianRupee' },
-  { name: 'Raw Material', path: '/inventory', icon: 'Package' },
+  { name: 'Item Catalogue', path: '/items', icon: 'Tag' },
+  { name: 'Reports & Analytics', path: '/reports', icon: 'BarChart3' },
   { name: 'Settings', path: '/settings', icon: 'Settings' },
 ];
 

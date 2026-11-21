@@ -1,7 +1,7 @@
 from typing import List, Optional, Annotated
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
-from sqlalchemy import or_, func
+from sqlalchemy import or_, func, String, cast
 from app.database.session import get_db
 from app.models.user import User
 from app.models.item import Item
@@ -30,16 +30,20 @@ def list_items(
         query = query.filter(Item.is_active == True)
 
     if q and isinstance(q, str) and q.strip():
-        term = f"%{q.strip().lower()}%"
-        query = query.filter(
-            or_(
-                func.lower(Item.item_name).like(term),
-                func.lower(Item.item_code).like(term),
-                func.lower(Item.description).like(term),
-            )
-        )
+        raw_val = q.strip()
+        num_clean = raw_val.lstrip("#").strip()
+        term = f"%{raw_val.lower()}%"
+        conditions = [
+            func.lower(func.coalesce(Item.item_name, "")).like(term),
+            func.lower(func.coalesce(Item.item_code, "")).like(term),
+            func.lower(func.coalesce(Item.description, "")).like(term),
+            cast(Item.id, String).like(f"%{num_clean}%"),
+        ]
+        if num_clean.isdigit():
+            conditions.append(Item.id == int(num_clean))
+        query = query.filter(or_(*conditions))
 
-    return query.order_by(Item.item_name.asc()).limit(limit).all()
+    return query.order_by(Item.id.asc()).limit(limit).all()
 
 
 @router.post("/", response_model=ItemResponse, status_code=status.HTTP_201_CREATED, summary="Create new catalogue item (Admin Only)")

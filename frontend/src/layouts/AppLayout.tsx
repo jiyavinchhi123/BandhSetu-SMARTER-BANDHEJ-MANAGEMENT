@@ -3,7 +3,7 @@ import { Outlet } from 'react-router-dom';
 import { Sidebar } from '../components/common/Sidebar';
 import { MobileNav } from '../components/common/MobileNav';
 import { Header } from '../components/common/Header';
-import { HealthBanner } from '../components/common/HealthBanner';
+import { LanguageSelectModal } from '../components/common/LanguageSelectModal';
 import { api, HealthResponse } from '../services/api';
 
 export const AppLayout: React.FC = () => {
@@ -36,17 +36,10 @@ export const AppLayout: React.FC = () => {
       <Sidebar className="hidden md:flex" />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 pb-20 md:pb-8">
+      <div className="flex-1 flex flex-col min-w-0 pb-28 md:pb-8">
         <Header searchTerm={searchTerm} onSearchChange={setSearchTerm} />
 
         <main className="flex-1 px-4 sm:px-6 lg:px-8 py-5 max-w-7xl w-full mx-auto space-y-5">
-          {/* Real-time Backend Health Status Bar */}
-          <HealthBanner
-            health={health}
-            isLoading={isHealthLoading}
-            onRefresh={checkBackendHealth}
-          />
-
           {/* Child Page Outlet */}
           <Outlet context={{ searchTerm, health, isHealthLoading, refreshHealth: checkBackendHealth }} />
         </main>
@@ -54,6 +47,9 @@ export const AppLayout: React.FC = () => {
 
       {/* Mobile Bottom Navigation (visible on mobile only) */}
       <MobileNav />
+
+      {/* Language Selection Modal (prompted after login or on request) */}
+      <LanguageSelectModal />
     </div>
   );
 };

@@ -19,7 +19,7 @@ export const AdminRoute: React.FC<{ children: React.ReactNode }> = ({ children }
   }
 
   if (role !== 'admin') {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/workers" replace />;
   }
 
   return <>{children}</>;

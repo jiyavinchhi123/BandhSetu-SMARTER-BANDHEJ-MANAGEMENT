@@ -2,6 +2,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Search, ChevronDown, Check, Sparkles } from 'lucide-react';
 import { api, ItemCatalogue } from '../../services/api';
 import { formatINR } from '../../utils/formatters';
+import { useLanguage } from '../../context/LanguageContext';
+import { translateEntityName } from '../../utils/translations';
 
 interface ItemSearchSelectProps {
   value: number | null;
@@ -16,6 +18,7 @@ export const ItemSearchSelect: React.FC<ItemSearchSelectProps> = ({
   placeholder = 'Search & select fabric item (e.g. type "R")...',
   className = '',
 }) => {
+  const { language } = useLanguage();
   const [isOpen, setIsOpen] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [items, setItems] = useState<ItemCatalogue[]>([]);
@@ -80,14 +83,16 @@ export const ItemSearchSelect: React.FC<ItemSearchSelectProps> = ({
           {selectedItem ? (
             <div className="flex items-center justify-between">
               <span className="text-sm font-semibold text-slate-800 truncate">
-                {selectedItem.item_name}
+                {translateEntityName(selectedItem.item_name, language)}
               </span>
               <span className="text-xs font-bold text-brand-700 bg-brand-50 px-2 py-0.5 rounded-md shrink-0 ml-2">
-                {formatINR(selectedItem.price_per_piece)}/pc
+                {formatINR(selectedItem.price_per_piece)}/{language === 'gu' ? 'પીસ' : 'pc'}
               </span>
             </div>
           ) : (
-            <span className="text-sm text-slate-400">{placeholder}</span>
+            <span className="text-sm text-slate-400">
+              {placeholder || (language === 'gu' ? 'ડિઝાઇનનું નામ શોધો...' : 'Search & select fabric item...')}
+            </span>
           )}
         </div>
         <ChevronDown className="w-4 h-4 text-slate-400 shrink-0" />
@@ -105,7 +110,7 @@ export const ItemSearchSelect: React.FC<ItemSearchSelectProps> = ({
                 autoFocus
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                placeholder="Type to filter items (e.g. 'R')..."
+                placeholder={language === 'gu' ? 'ડિઝાઇન શોધવા માટે લખો...' : "Type to filter items (e.g. 'R')..."}
                 className="w-full pl-9 pr-3 py-2 bg-white text-xs sm:text-sm rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500"
               />
             </div>
@@ -114,10 +119,12 @@ export const ItemSearchSelect: React.FC<ItemSearchSelectProps> = ({
           {/* Items Options List */}
           <div className="max-h-60 overflow-y-auto divide-y divide-slate-50">
             {isLoading ? (
-              <div className="p-4 text-center text-xs text-slate-400">Loading items...</div>
+              <div className="p-4 text-center text-xs text-slate-400">
+                {language === 'gu' ? 'ડિઝાઇન લોડ થઈ રહી છે...' : 'Loading items...'}
+              </div>
             ) : items.length === 0 ? (
               <div className="p-4 text-center text-xs text-slate-400">
-                No active items matching "{searchTerm}"
+                {language === 'gu' ? `કોઈ ડિઝાઇન મળી નથી "${searchTerm}"` : `No active items matching "${searchTerm}"`}
               </div>
             ) : (
               items.map((item) => {
@@ -134,26 +141,26 @@ export const ItemSearchSelect: React.FC<ItemSearchSelectProps> = ({
                   >
                     <div className="min-w-0 pr-2">
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="font-semibold truncate">{item.item_name}</span>
+                        <span className="font-semibold truncate">{translateEntityName(item.item_name, language)}</span>
                         {item.item_type && (
                           <span className="text-[10px] font-medium text-slate-600 bg-slate-100 px-1.5 py-0.2 rounded">
-                            {item.item_type}
+                            {translateEntityName(item.item_type, language)}
                           </span>
                         )}
                         {item.is_sarkam && (
                           <span className="text-[10px] font-semibold text-indigo-700 bg-indigo-50 px-1 py-0.2 rounded border border-indigo-200">
-                            Sarkam
+                            {language === 'gu' ? 'સરકમ' : 'Sarkam'}
                           </span>
                         )}
                         {item.is_choot && (
                           <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 px-1 py-0.2 rounded border border-amber-200">
-                            Choot
+                            {language === 'gu' ? 'છૂટ' : 'Choot'}
                           </span>
                         )}
                       </div>
                       {item.description && (
                         <p className="text-[11px] text-slate-400 truncate mt-0.5">
-                          {item.description}
+                          {translateEntityName(item.description, language)}
                         </p>
                       )}
                     </div>

@@ -20,10 +20,13 @@ import { api, WorkerItem } from '../services/api';
 import { Button, Card, Badge, Input, LoadingSpinner } from '../components/ui';
 import { formatINR, formatIndianDate } from '../utils/formatters';
 import { useToast } from '../hooks/useToast';
+import { useLanguage } from '../context/LanguageContext';
+import { translateEntityName } from '../utils/translations';
 
 export const Workers: React.FC = () => {
   const navigate = useNavigate();
   const { showToast } = useToast();
+  const { t, language } = useLanguage();
 
   const [workers, setWorkers] = useState<WorkerItem[]>([]);
   const [searchParams] = useSearchParams();
@@ -54,7 +57,9 @@ export const Workers: React.FC = () => {
         q: searchTerm,
         status: statusFilter,
       });
-      setWorkers(data);
+      // Chronological ascending: oldest first, latest entry at last
+      const sorted = [...data].sort((a, b) => a.id - b.id);
+      setWorkers(sorted);
     } catch (err: any) {
       showToast({
         type: 'error',
@@ -128,11 +133,8 @@ export const Workers: React.FC = () => {
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
             <Users className="w-6 h-6 text-brand-600" />
-            Bandhej Artisan Worker Directory
+            {t('artisan_worker', 'Artisan Worker')}
           </h2>
-          <p className="text-xs sm:text-sm text-slate-500">
-            Managing 200–500 home-based women artisans across Kutch and Saurashtra clusters
-          </p>
         </div>
 
         <Button
@@ -141,7 +143,7 @@ export const Workers: React.FC = () => {
           icon={<Plus className="w-4 h-4" />}
           onClick={() => setIsRegisterOpen(true)}
         >
-          Register New Artisan
+          {t('register_artisan', 'Register New Artisan')}
         </Button>
       </div>
 
@@ -153,7 +155,7 @@ export const Workers: React.FC = () => {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by Full Name (type 'R'), Serial Number (WRK-0001), Mobile, Town, or Address..."
+            placeholder={t('search_workers_placeholder', "Search by Full Name (type 'R'), Serial Number (WRK-0001), Mobile, Town, or Address...")}
             className="w-full pl-11 pr-4 py-3 bg-slate-50 hover:bg-slate-100/70 focus:bg-white text-sm sm:text-base text-slate-900 placeholder:text-slate-400 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all font-medium"
           />
         </div>
@@ -162,7 +164,7 @@ export const Workers: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-2 pt-1 text-xs">
           <div className="flex items-center gap-1.5 overflow-x-auto pb-1 max-w-full">
             <span className="text-slate-400 font-semibold mr-1 flex items-center gap-1">
-              <Filter className="w-3.5 h-3.5" /> Status:
+              <Filter className="w-3.5 h-3.5" /> {t('status_label', 'Status')}:
             </span>
             {['Active', 'Inactive', 'All'].map((st) => (
               <button
@@ -174,13 +176,13 @@ export const Workers: React.FC = () => {
                     : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
                 }`}
               >
-                {st}
+                {st === 'Active' ? t('active', 'Active') : st === 'Inactive' ? t('inactive', 'Inactive') : t('all', 'All')}
               </button>
             ))}
           </div>
 
           <div className="text-slate-500 font-medium">
-            Showing <span className="font-bold text-slate-900">{workers.length}</span> artisans
+            {t('showing', 'Showing')} <span className="font-bold text-slate-900">{workers.length}</span> {t('artisans', 'artisans')}
           </div>
         </div>
       </Card>
@@ -191,12 +193,12 @@ export const Workers: React.FC = () => {
       ) : workers.length === 0 ? (
         <Card className="text-center py-12 border-dashed">
           <Users className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-          <h3 className="text-base font-bold text-slate-800">No artisans found</h3>
+          <h3 className="text-base font-bold text-slate-800">{t('no_artisans_found', 'No artisans found')}</h3>
           <p className="text-xs sm:text-sm text-slate-500 max-w-sm mx-auto mt-1 mb-4">
             No worker records matched your search query "{searchTerm}".
           </p>
           <Button variant="outline" size="sm" onClick={() => setSearchTerm('')}>
-            Clear Search Filter
+            {t('clear_search_filter', 'Clear Search Filter')}
           </Button>
         </Card>
       ) : (
@@ -218,20 +220,20 @@ export const Workers: React.FC = () => {
                     dot
                     size="sm"
                   >
-                    {worker.status}
+                    {worker.status === 'Active' ? t('active', 'Active') : t('inactive', 'Inactive')}
                   </Badge>
                 </div>
 
                 {/* Worker Identity */}
                 <div>
                   <h3 className="font-bold text-slate-900 text-base group-hover:text-brand-600 transition-colors leading-snug">
-                    {worker.full_name}
+                    {translateEntityName(worker.full_name, language)}
                   </h3>
                   <p className="text-xs text-slate-500 flex items-center gap-1.5 mt-1">
                     <MapPin className="w-3.5 h-3.5 text-slate-400 shrink-0" />
                     <span>
-                      {worker.town || worker.village || 'Gujarat'}
-                      {worker.address ? ` • ${worker.address}` : ''}
+                      {translateEntityName(worker.town || worker.village || 'Gujarat', language)}
+                      {worker.address ? ` • ${translateEntityName(worker.address, language)}` : ''}
                     </span>
                   </p>
                   <p className="text-xs text-slate-400 font-mono mt-0.5 flex items-center gap-1.5">
@@ -244,16 +246,16 @@ export const Workers: React.FC = () => {
                 <div className="grid grid-cols-2 gap-2 p-2.5 rounded-xl bg-slate-50 border border-slate-100 text-xs">
                   <div>
                     <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                      Pending Knotting
+                      {t('pending_pcs_label', 'Pending Pcs')}
                     </span>
                     <p className="text-sm font-bold text-slate-800 flex items-center gap-1 mt-0.5">
                       <Package className="w-3.5 h-3.5 text-amber-500" />
-                      <span>{worker.pending_pieces} Sarees</span>
+                      <span>{worker.pending_pieces} {t('pieces_unit', 'Pcs')}</span>
                     </p>
                   </div>
                   <div>
                     <span className="text-[10px] text-slate-400 uppercase font-semibold">
-                      Payable Balance
+                      {t('payable_bal_label', 'Payable Balance')}
                     </span>
                     <p className="text-sm font-bold text-emerald-700 mt-0.5">
                       {formatINR(worker.payable_balance)}
@@ -265,10 +267,10 @@ export const Workers: React.FC = () => {
               {/* Card Footer */}
               <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between text-xs text-slate-400">
                 <span className="text-[11px]">
-                  Joined: {formatIndianDate(worker.joining_date)}
+                  {t('joined', 'Joined')}: {formatIndianDate(worker.joining_date)}
                 </span>
                 <span className="inline-flex items-center font-bold text-brand-600 group-hover:translate-x-1 transition-transform">
-                  View Profile <ArrowRight className="w-3.5 h-3.5 ml-1" />
+                  {language === 'gu' ? 'ખાતું જુઓ' : 'View Profile'} <ArrowRight className="w-3.5 h-3.5 ml-1" />
                 </span>
               </div>
             </div>
@@ -284,17 +286,19 @@ export const Workers: React.FC = () => {
               <div>
                 <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
                   <Users className="w-5 h-5 text-brand-600" />
-                  Register New Bandhej Artisan
+                  {t('register_new_artisan_modal_title', 'Register New Artisan Worker')}
                 </h3>
                 <p className="text-xs text-slate-500">
-                  Unique sequential serial number will be generated automatically.
+                  {language === 'gu'
+                    ? 'યુનિક સીરીયલ નંબર આપોઆપ જનરેટ થશે.'
+                    : 'Unique sequential serial number will be generated automatically.'}
                 </p>
               </div>
             </div>
 
             <form onSubmit={handleRegister} className="space-y-4">
               <Input
-                label="Full Name *"
+                label={`${t('full_name', 'Full Name')} *`}
                 required
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
@@ -303,7 +307,7 @@ export const Workers: React.FC = () => {
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <Input
-                  label="Mobile Number *"
+                  label={`${t('mobile_number', 'Mobile Number')} *`}
                   type="tel"
                   required
                   value={phone}
@@ -311,7 +315,7 @@ export const Workers: React.FC = () => {
                   placeholder="e.g. +91 98250 12345"
                 />
                 <Input
-                  label="Town"
+                  label={t('town_city', 'Town / Village')}
                   value={town}
                   onChange={(e) => setTown(e.target.value)}
                   placeholder="e.g. Anjar"
@@ -320,7 +324,7 @@ export const Workers: React.FC = () => {
 
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-700">
-                  Address
+                  {t('address', 'Address / Street')}
                 </label>
                 <textarea
                   rows={2}
@@ -333,7 +337,7 @@ export const Workers: React.FC = () => {
 
               <div className="space-y-1.5">
                 <label className="block text-xs font-medium text-slate-700">
-                  Specialization / Remarks
+                  {t('specialization_remarks_label', 'Specialization / Remarks')}
                 </label>
                 <textarea
                   rows={2}
@@ -344,10 +348,6 @@ export const Workers: React.FC = () => {
                 />
               </div>
 
-              <div className="p-3 bg-amber-50 rounded-xl text-xs text-amber-800 border border-amber-200">
-                Notice: Women artisans do not receive application login accounts. Management records work, returns, and payments on their behalf.
-              </div>
-
               <div className="flex justify-end gap-2 pt-2">
                 <Button
                   type="button"
@@ -355,14 +355,14 @@ export const Workers: React.FC = () => {
                   onClick={() => setIsRegisterOpen(false)}
                   disabled={isSubmitting}
                 >
-                  Cancel
+                  {t('cancel', 'Cancel')}
                 </Button>
                 <Button
                   type="submit"
                   variant="primary"
                   isLoading={isSubmitting}
                 >
-                  Register Artisan
+                  {t('submit_register', 'Register Artisan')}
                 </Button>
               </div>
             </form>

@@ -7,20 +7,20 @@ import {
   CheckCircle,
   XCircle,
   AlertCircle,
-  IndianRupee,
   Tag,
-  ShieldCheck,
   RefreshCw,
-  Info,
 } from 'lucide-react';
 import { api, ItemCatalogue } from '../services/api';
 import { useAuth } from '../context/AuthContext';
 import { useToast } from '../context/ToastContext';
+import { useLanguage } from '../context/LanguageContext';
 import { formatINR, formatIndianDate } from '../utils/formatters';
+import { translateEntityName } from '../utils/translations';
 
 export const Items: React.FC = () => {
   const { role } = useAuth();
   const { showToast } = useToast();
+  const { t, language } = useLanguage();
   const isAdmin = role === 'admin';
 
   const [items, setItems] = useState<ItemCatalogue[]>([]);
@@ -56,7 +56,8 @@ export const Items: React.FC = () => {
       if (filterActive !== null) params.active_only = filterActive;
 
       const data = await api.getItems(params);
-      setItems(data);
+      const sorted = [...data].sort((a, b) => a.id - b.id);
+      setItems(sorted);
     } catch (err: any) {
       showToast({
         type: 'error',
@@ -181,10 +182,6 @@ export const Items: React.FC = () => {
 
   const totalItems = items.length;
   const activeItemsCount = items.filter((i) => i.is_active).length;
-  const avgPrice =
-    totalItems > 0
-      ? items.reduce((acc, i) => acc + i.price_per_piece, 0) / totalItems
-      : 0;
 
   return (
     <div className="space-y-6 pb-20 md:pb-6">
@@ -193,15 +190,12 @@ export const Items: React.FC = () => {
         <div>
           <div className="flex items-center gap-2">
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
-              Bandhej Item & Price Catalogue
+              {t('bandhej_item_catalogue', 'Bandhej Item & Price Catalogue')}
             </h1>
             <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-brand-100 text-brand-800 border border-brand-200">
-              {totalItems} Designs
+              {totalItems} {t('designs_unit', 'Designs')}
             </span>
           </div>
-          <p className="text-sm text-slate-500 mt-1">
-            Manage fabric designs, tied knot rates, and historical price protection.
-          </p>
         </div>
 
         {isAdmin && (
@@ -210,20 +204,20 @@ export const Items: React.FC = () => {
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium text-sm rounded-xl shadow-sm transition-all focus:ring-2 focus:ring-brand-500/20 active:scale-95"
           >
             <Plus className="w-4 h-4" />
-            <span>Add New Item</span>
+            <span>{t('add_new_item', 'Add New Item')}</span>
           </button>
         )}
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
         <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
           <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
             <Package className="w-5 h-5" />
           </div>
           <div>
             <div className="text-xl font-bold text-slate-900">{totalItems}</div>
-            <div className="text-xs text-slate-500 font-medium">Total Designs</div>
+            <div className="text-xs text-slate-500 font-medium">{t('total_designs', 'Total Designs')}</div>
           </div>
         </div>
 
@@ -233,36 +227,8 @@ export const Items: React.FC = () => {
           </div>
           <div>
             <div className="text-xl font-bold text-emerald-700">{activeItemsCount}</div>
-            <div className="text-xs text-slate-500 font-medium">Active Designs</div>
+            <div className="text-xs text-slate-500 font-medium">{t('active_designs', 'Active Designs')}</div>
           </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center shrink-0">
-            <IndianRupee className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xl font-bold text-slate-900">{formatINR(avgPrice)}</div>
-            <div className="text-xs text-slate-500 font-medium">Avg Piece Rate</div>
-          </div>
-        </div>
-
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-            <ShieldCheck className="w-5 h-5" />
-          </div>
-          <div>
-            <div className="text-xs font-semibold text-blue-700">Protected</div>
-            <div className="text-[11px] text-slate-500">Historical Lock</div>
-          </div>
-        </div>
-      </div>
-
-      {/* Historical Protection Notice */}
-      <div className="bg-amber-50/70 border border-amber-200/80 rounded-xl p-3.5 flex items-start gap-3 text-amber-900">
-        <Info className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-        <div className="text-xs leading-relaxed">
-          <strong className="font-semibold">Historical Price Protection Guaranteed:</strong> Whenever an item is issued to an artisan in a Work Distribution, its price per piece is permanently snapshotted. Updating rates here will apply strictly to future batches without retroactively affecting existing worker wages or ledger balances.
         </div>
       </div>
 
@@ -274,7 +240,7 @@ export const Items: React.FC = () => {
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search items by name, code... (e.g. 'Rani', 'Saree')"
+            placeholder={t('search_items_placeholder', "Search items by design name or serial no... (e.g. 'Soni', '1', '2')")}
             className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
           />
           {searchQuery && (
@@ -296,7 +262,7 @@ export const Items: React.FC = () => {
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            All ({totalItems})
+            {t('all', 'All')} ({totalItems})
           </button>
           <button
             onClick={() => setFilterActive(true)}
@@ -306,7 +272,7 @@ export const Items: React.FC = () => {
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Active Only
+            {t('active_only', 'Active Only')}
           </button>
           <button
             onClick={() => setFilterActive(false)}
@@ -316,7 +282,7 @@ export const Items: React.FC = () => {
                 : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
             }`}
           >
-            Inactive
+            {t('inactive', 'Inactive')}
           </button>
           <button
             onClick={fetchItems}
@@ -359,14 +325,14 @@ export const Items: React.FC = () => {
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-50 border-b border-slate-200 text-xs font-semibold text-slate-600 uppercase tracking-wider">
-                  <th className="py-3.5 px-4">Design / Item Name</th>
-                  <th className="py-3.5 px-4">Type</th>
-                  <th className="py-3.5 px-4">Work Option</th>
-                  <th className="py-3.5 px-4">Description</th>
-                  <th className="py-3.5 px-4 text-right">Price / Piece</th>
-                  <th className="py-3.5 px-4 text-center">Status</th>
-                  <th className="py-3.5 px-4 text-center">Created</th>
-                  {isAdmin && <th className="py-3.5 px-4 text-right">Actions</th>}
+                  <th className="py-3.5 px-4">{t('col_serial_no', 'Serial No.')}</th>
+                  <th className="py-3.5 px-4">{t('col_design_name', 'Design / Item Name')}</th>
+                  <th className="py-3.5 px-4">{t('col_type', 'Type')}</th>
+                  <th className="py-3.5 px-4">{t('col_work_option', 'Work Option')}</th>
+                  <th className="py-3.5 px-4 text-right">{t('col_price_piece', 'Price / Piece')}</th>
+                  <th className="py-3.5 px-4 text-center">{t('col_status', 'Status')}</th>
+                  <th className="py-3.5 px-4 text-center">{t('col_created', 'Created')}</th>
+                  {isAdmin && <th className="py-3.5 px-4 text-right">{t('col_actions', 'Actions')}</th>}
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-sm">
@@ -376,13 +342,17 @@ export const Items: React.FC = () => {
                     className="hover:bg-slate-50/80 transition-colors group"
                   >
                     <td className="py-3.5 px-4">
-                      <div className="font-semibold text-slate-900">{item.item_name}</div>
-                      <div className="text-xs text-slate-400">ID #{item.id}</div>
+                      <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-md border border-slate-200">
+                        {item.id}
+                      </span>
+                    </td>
+                    <td className="py-3.5 px-4">
+                      <div className="font-semibold text-slate-900">{translateEntityName(item.item_name, language)}</div>
                     </td>
                     <td className="py-3.5 px-4">
                       {item.item_type ? (
                         <span className="bg-slate-100 text-slate-800 font-medium px-2 py-0.5 rounded text-xs border border-slate-200">
-                          {item.item_type}
+                          {translateEntityName(item.item_type, language)}
                         </span>
                       ) : (
                         <span className="text-slate-400 text-xs">—</span>
@@ -392,21 +362,18 @@ export const Items: React.FC = () => {
                       <div className="flex items-center gap-1.5 flex-wrap">
                         {item.is_sarkam && (
                           <span className="bg-indigo-50 text-indigo-700 font-semibold px-2 py-0.5 rounded text-[11px] border border-indigo-200">
-                            Sarkam
+                            {language === 'gu' ? 'સરકમ' : 'Sarkam'}
                           </span>
                         )}
                         {item.is_choot && (
                           <span className="bg-amber-50 text-amber-800 font-semibold px-2 py-0.5 rounded text-[11px] border border-amber-200">
-                            Choot
+                            {language === 'gu' ? 'છૂટ' : 'Choot'}
                           </span>
                         )}
                         {!item.is_sarkam && !item.is_choot && (
                           <span className="text-slate-400 text-xs">—</span>
                         )}
                       </div>
-                    </td>
-                    <td className="py-3.5 px-4 text-slate-500 text-xs max-w-xs truncate">
-                      {item.description || '—'}
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <span className="font-bold text-slate-900 text-base">
@@ -421,7 +388,7 @@ export const Items: React.FC = () => {
                             : 'bg-slate-100 text-slate-600 border border-slate-200'
                         }`}
                       >
-                        {item.is_active ? 'Active' : 'Inactive'}
+                        {item.is_active ? (language === 'gu' ? 'સક્રિય' : 'Active') : (language === 'gu' ? 'નિષ્ક્રિય' : 'Inactive')}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-center text-xs text-slate-500">
@@ -469,8 +436,11 @@ export const Items: React.FC = () => {
                 <div className="flex items-start justify-between gap-2">
                   <div>
                     <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        {item.id}
+                      </span>
                       <h3 className="font-semibold text-slate-900 text-base">
-                        {item.item_name}
+                        {translateEntityName(item.item_name, language)}
                       </h3>
                       <span
                         className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
@@ -479,23 +449,23 @@ export const Items: React.FC = () => {
                             : 'bg-slate-100 text-slate-600'
                         }`}
                       >
-                        {item.is_active ? 'Active' : 'Inactive'}
+                        {item.is_active ? (language === 'gu' ? 'સક્રિય' : 'Active') : (language === 'gu' ? 'નિષ્ક્રિય' : 'Inactive')}
                       </span>
                     </div>
                     <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                       {item.item_type && (
                         <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                          {item.item_type}
+                          {translateEntityName(item.item_type, language)}
                         </span>
                       )}
                       {item.is_sarkam && (
                         <span className="bg-indigo-50 text-indigo-700 font-semibold px-1.5 py-0.5 rounded text-[10px] border border-indigo-200">
-                          Sarkam
+                          {language === 'gu' ? 'સરકમ' : 'Sarkam'}
                         </span>
                       )}
                       {item.is_choot && (
                         <span className="bg-amber-50 text-amber-800 font-semibold px-1.5 py-0.5 rounded text-[10px] border border-amber-200">
-                          Choot
+                          {language === 'gu' ? 'છૂટ' : 'Choot'}
                         </span>
                       )}
                     </div>
@@ -504,15 +474,9 @@ export const Items: React.FC = () => {
                     <div className="text-lg font-bold text-slate-900">
                       {formatINR(item.price_per_piece, true)}
                     </div>
-                    <div className="text-[10px] text-slate-400">per piece</div>
+                    <div className="text-[10px] text-slate-400">{language === 'gu' ? 'ભાવ / પીસ' : 'per piece'}</div>
                   </div>
                 </div>
-
-                {item.description && (
-                  <p className="text-xs text-slate-600 bg-slate-50 p-2 rounded-lg">
-                    {item.description}
-                  </p>
-                )}
 
                 <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-100">
                   <span>Created: {formatIndianDate(item.created_at)}</span>
@@ -546,8 +510,8 @@ export const Items: React.FC = () => {
 
       {/* Add / Edit Item Modal */}
       {(isAddModalOpen || editingItem) && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 shadow-2xl border border-slate-200">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-5 sm:p-6 shadow-2xl border border-slate-200 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-2.5">
                 <div className="p-2 rounded-xl bg-brand-50 text-brand-600">
@@ -661,21 +625,6 @@ export const Items: React.FC = () => {
                     <span>Choot</span>
                   </label>
                 </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Description / Specification
-                </label>
-                <textarea
-                  rows={2}
-                  value={formData.description}
-                  onChange={(e) =>
-                    setFormData({ ...formData, description: e.target.value })
-                  }
-                  placeholder="e.g. Pure Gaji silk with intricate 3-dot Rai Bandhej pattern"
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm"
-                />
               </div>
 
               <div className="flex items-center gap-2">

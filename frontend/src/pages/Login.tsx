@@ -41,6 +41,7 @@ export const Login: React.FC = () => {
 
     try {
       await login(identifier.trim(), password);
+      localStorage.setItem('bandhej_show_lang_modal', 'true');
       navigate(from, { replace: true });
     } catch (err: any) {
       if (err.code === 'ACCESS_HOURS_EXPIRED' || err.code === 'ACCOUNT_LOCKED') {

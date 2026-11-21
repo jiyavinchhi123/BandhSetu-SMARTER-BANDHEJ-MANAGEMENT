@@ -3,9 +3,6 @@ import { NavLink } from 'react-router-dom';
 import {
   LayoutDashboard,
   Users,
-  Layers,
-  IndianRupee,
-  Package,
   Tag,
   Settings,
   Sparkles,
@@ -15,6 +12,8 @@ import {
 } from 'lucide-react';
 import { APP_NAME, APP_TAGLINE } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
+import { useLanguage } from '../../context/LanguageContext';
+import { translateEntityName } from '../../utils/translations';
 
 interface SidebarProps {
   className?: string;
@@ -29,27 +28,25 @@ interface NavItem {
 
 export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   const { user, role, logout } = useAuth();
+  const { t, language } = useLanguage();
 
   const baseNavItems: NavItem[] = [
-    { name: 'Dashboard', path: '/', icon: LayoutDashboard },
-    { name: 'Artisan Workers', path: '/workers', icon: Users },
-    { name: 'Item Catalogue', path: '/items', icon: Tag },
-    { name: 'Work Batches', path: '/batches', icon: Layers },
-    { name: 'Wages & Payouts', path: '/payments', icon: IndianRupee },
-    { name: 'Reports & Analytics', path: '/reports', icon: BarChart3 },
-    { name: 'Fabric Inventory', path: '/inventory', icon: Package },
+    { name: t('dashboard', 'Dashboard'), path: '/', icon: LayoutDashboard },
+    { name: t('artisan_workers', 'Artisan Workers'), path: '/workers', icon: Users },
+    { name: t('item_catalogue', 'Item Catalogue'), path: '/items', icon: Tag },
+    { name: t('reports_analytics', 'Reports & Analytics'), path: '/reports', icon: BarChart3 },
   ];
 
   // Admin exclusive navigation
   const adminNavItems: NavItem[] = [
-    { name: 'Manager Access', path: '/managers', icon: ShieldAlert },
-    { name: 'Settings', path: '/settings', icon: Settings },
+    { name: t('manager_access', 'Manager Access'), path: '/managers', icon: ShieldAlert },
+    { name: t('settings', 'Settings'), path: '/settings', icon: Settings },
   ];
 
   const visibleNavItems: NavItem[] =
     role === 'admin'
       ? [...baseNavItems, ...adminNavItems]
-      : [...baseNavItems, { name: 'Settings', path: '/settings', icon: Settings }];
+      : [{ name: t('artisan_workers', 'Artisan Workers'), path: '/workers', icon: Users }];
 
   return (
     <aside
@@ -76,7 +73,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
         {/* Navigation list */}
         <div className="px-3 py-4 space-y-1">
           <p className="px-3 pb-2 text-[10px] font-semibold tracking-wider text-slate-400 uppercase">
-            Operations Menu
+            {t('operations_menu', 'Operations Menu')}
           </p>
           {visibleNavItems.map((item) => {
             const Icon = item.icon;
@@ -114,9 +111,11 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
             {user?.full_name ? user.full_name.split(' ').map((n) => n[0]).join('') : 'U'}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-xs font-semibold text-white truncate">{user?.full_name || 'User'}</p>
+            <p className="text-xs font-semibold text-white truncate">
+              {user?.full_name ? translateEntityName(user.full_name, language) : 'User'}
+            </p>
             <p className="text-[11px] text-amber-400 truncate font-medium">
-              {role === 'admin' ? 'Owner / Admin (24/7)' : 'Workshop Manager'}
+              {role === 'admin' ? t('owner_admin_role', 'Owner / Admin (24/7)') : t('workshop_manager_role', 'Workshop Manager')}
             </p>
           </div>
         </div>
@@ -126,7 +125,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
           className="w-full flex items-center justify-center gap-2 py-2 px-3 rounded-xl bg-slate-900 hover:bg-rose-950/40 text-slate-400 hover:text-rose-400 text-xs font-semibold transition-colors border border-slate-800"
         >
           <LogOut className="w-3.5 h-3.5" />
-          <span>Sign Out</span>
+          <span>{t('sign_out', 'Sign Out')}</span>
         </button>
       </div>
     </aside>

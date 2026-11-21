@@ -10,7 +10,6 @@ import {
   Power,
   Calendar,
   AlertTriangle,
-  History,
   CheckCircle2,
   XCircle,
   FileText,
@@ -19,13 +18,15 @@ import {
 import { api, UserProfile, AuditLogItem } from '../services/api';
 import { Button, Card, Badge, Input, LoadingSpinner, ConfirmDialog } from '../components/ui';
 import { useToast } from '../hooks/useToast';
+import { useLanguage } from '../context/LanguageContext';
 import { formatIndianDate, formatIndianDateTime } from '../utils/formatters';
+import { translateEntityName } from '../utils/translations';
 
 export const ManagerAccessControl: React.FC = () => {
   const { showToast } = useToast();
+  const { t, language } = useLanguage();
 
   const [managers, setManagers] = useState<UserProfile[]>([]);
-  const [auditLogs, setAuditLogs] = useState<AuditLogItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   // Modal / Action states
@@ -57,12 +58,8 @@ export const ManagerAccessControl: React.FC = () => {
   const loadData = useCallback(async () => {
     setIsLoading(true);
     try {
-      const [mgrs, logs] = await Promise.all([
-        api.listManagers(),
-        api.getAuditLogs(30),
-      ]);
+      const mgrs = await api.listManagers();
       setManagers(mgrs);
-      setAuditLogs(logs);
     } catch (err: any) {
       showToast({
         type: 'error',
@@ -220,11 +217,8 @@ export const ManagerAccessControl: React.FC = () => {
         <div>
           <h2 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
             <ShieldCheck className="w-6 h-6 text-brand-600" />
-            Manager & Authorized Operator Access Control
+            {t('manager_access', 'Manager Access')}
           </h2>
-          <p className="text-xs sm:text-sm text-slate-500">
-            Control operating hours, immediate lock overrides, and audit trails for workshop managers.
-          </p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -234,7 +228,7 @@ export const ManagerAccessControl: React.FC = () => {
             icon={<RefreshCw className="w-3.5 h-3.5" />}
             onClick={loadData}
           >
-            Refresh
+            {t('refresh', 'Refresh')}
           </Button>
           <Button
             variant="primary"
@@ -242,7 +236,7 @@ export const ManagerAccessControl: React.FC = () => {
             icon={<Plus className="w-3.5 h-3.5" />}
             onClick={() => setIsCreateOpen(true)}
           >
-            Create Manager
+            {t('create_manager', '+ Create Manager')}
           </Button>
         </div>
       </div>
@@ -278,7 +272,7 @@ export const ManagerAccessControl: React.FC = () => {
                   </div>
                   <div>
                     <h3 className="font-bold text-slate-900 text-base leading-tight">
-                      {m.full_name}
+                      {translateEntityName(m.full_name, language)}
                     </h3>
                     <p className="text-xs text-slate-500 mt-0.5">{m.email}</p>
                     {m.phone && <p className="text-xs text-slate-400 font-mono">{m.phone}</p>}
@@ -288,15 +282,15 @@ export const ManagerAccessControl: React.FC = () => {
                 <div className="flex flex-col items-end gap-1.5">
                   {isLocked ? (
                     <Badge variant="danger" dot size="sm">
-                      LOCKED BY ADMIN
+                      {t('locked_by_admin', 'LOCKED BY ADMIN')}
                     </Badge>
                   ) : !isActive ? (
                     <Badge variant="neutral" size="sm">
-                      DISABLED
+                      {t('disabled_status', 'DISABLED')}
                     </Badge>
                   ) : (
                     <Badge variant="success" dot size="sm">
-                      OPERATIONAL
+                      {t('operational_status', 'OPERATIONAL')}
                     </Badge>
                   )}
                 </div>
@@ -307,7 +301,7 @@ export const ManagerAccessControl: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <span className="text-slate-500 flex items-center gap-1.5 font-medium">
                     <Clock className="w-3.5 h-3.5 text-slate-400" />
-                    Permitted Hours (IST):
+                    {t('permitted_hours_label', 'Permitted Hours (IST):')}
                   </span>
                   <span className="font-bold text-slate-800">
                     {m.access_start_time} – {m.access_end_time} IST
@@ -316,22 +310,22 @@ export const ManagerAccessControl: React.FC = () => {
 
                 {m.temporary_extension_until && (
                   <div className="flex items-center justify-between text-brand-700 bg-brand-50 p-1.5 rounded-lg">
-                    <span className="font-semibold">Temporary Extension:</span>
+                    <span className="font-semibold">{t('temporary_extension_label', 'Temporary Extension:')}</span>
                     <span className="font-bold font-mono">
-                      Until {formatIndianDateTime(m.temporary_extension_until)}
+                      {language === 'gu' ? 'સુધી' : 'Until'} {formatIndianDateTime(m.temporary_extension_until)}
                     </span>
                   </div>
                 )}
 
                 {isLocked && m.lock_reason && (
                   <div className="p-2 rounded-lg bg-rose-100/70 border border-rose-200 text-rose-900 font-medium">
-                    <span className="font-bold">Lock Reason:</span> {m.lock_reason}
+                    <span className="font-bold">{t('lock_reason_label', 'Lock Reason:')}</span> {m.lock_reason}
                   </div>
                 )}
 
                 <div className="flex items-center justify-between text-slate-400 pt-1 border-t border-slate-200/50 text-[11px]">
-                  <span>Last Login:</span>
-                  <span>{m.last_login_at ? formatIndianDateTime(m.last_login_at) : 'Never logged in'}</span>
+                  <span>{t('last_login_label', 'Last Login:')}</span>
+                  <span>{m.last_login_at ? formatIndianDateTime(m.last_login_at) : t('never_logged_in', 'Never logged in')}</span>
                 </div>
               </div>
 
@@ -345,7 +339,7 @@ export const ManagerAccessControl: React.FC = () => {
                     icon={<Unlock className="w-3.5 h-3.5" />}
                     onClick={() => handleUnlock(m)}
                   >
-                    Unlock Account
+                    {t('unlock_account', 'Unlock Account')}
                   </Button>
                 ) : (
                   <Button
@@ -354,7 +348,7 @@ export const ManagerAccessControl: React.FC = () => {
                     icon={<Lock className="w-3.5 h-3.5" />}
                     onClick={() => setSelectedManagerForLock(m)}
                   >
-                    Lock Immediately
+                    {t('lock_immediately', 'Lock Immediately')}
                   </Button>
                 )}
 
@@ -368,7 +362,7 @@ export const ManagerAccessControl: React.FC = () => {
                     setEndTime(m.access_end_time || '20:00');
                   }}
                 >
-                  Edit Hours
+                  {t('edit_hours', 'Edit Hours')}
                 </Button>
 
                 <Button
@@ -379,7 +373,7 @@ export const ManagerAccessControl: React.FC = () => {
                     setExtendMinutes(60);
                   }}
                 >
-                  + Extend Hours
+                  {t('extend_hours', '+ Extend Hours')}
                 </Button>
 
                 <Button
@@ -390,72 +384,12 @@ export const ManagerAccessControl: React.FC = () => {
                   onClick={() => handleToggleActive(m)}
                 >
                   <Power className={`w-3.5 h-3.5 mr-1 ${togglingManagerId === m.id ? 'animate-spin' : ''}`} />
-                  {togglingManagerId === m.id ? 'Updating...' : isActive ? 'Disable' : 'Enable'}
+                  {togglingManagerId === m.id ? 'Updating...' : isActive ? t('disable_btn', 'Disable') : t('enable_btn', 'Enable')}
                 </Button>
               </div>
             </Card>
           );
         })}
-      </div>
-
-      {/* Security Audit Log Table */}
-      <div className="space-y-3 pt-2">
-        <div className="flex items-center justify-between">
-          <h3 className="text-base sm:text-lg font-bold text-slate-900 flex items-center gap-2">
-            <History className="w-5 h-5 text-slate-500" />
-            Security & Login Activity Trail
-          </h3>
-          <span className="text-xs text-slate-500">Live IST Audit Record</span>
-        </div>
-
-        <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xs">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                <th className="py-3 px-4">Action</th>
-                <th className="py-3 px-4">User</th>
-                <th className="py-3 px-4">IP Address</th>
-                <th className="py-3 px-4">Details</th>
-                <th className="py-3 px-4 text-right">Time (IST)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 text-xs">
-              {auditLogs.map((log) => {
-                const isFail = log.action.includes('BLOCKED') || log.action.includes('FAILED');
-                const isLock = log.action.includes('LOCKED');
-                const isSuccess = log.action.includes('SUCCESS') || log.action.includes('UNLOCKED');
-
-                return (
-                  <tr key={log.id} className="hover:bg-slate-50/70 transition-colors">
-                    <td className="py-3 px-4 font-mono font-bold">
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-md ${
-                          isLock
-                            ? 'bg-rose-100 text-rose-800'
-                            : isFail
-                            ? 'bg-amber-100 text-amber-800'
-                            : isSuccess
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-slate-100 text-slate-700'
-                        }`}
-                      >
-                        {log.action}
-                      </span>
-                    </td>
-                    <td className="py-3 px-4 font-medium text-slate-800">
-                      {log.user_email || 'Anonymous'}
-                    </td>
-                    <td className="py-3 px-4 font-mono text-slate-500">{log.ip_address || '—'}</td>
-                    <td className="py-3 px-4 text-slate-600 max-w-xs truncate">{log.details || '—'}</td>
-                    <td className="py-3 px-4 text-right text-slate-500 font-medium">
-                      {log.timestamp_ist}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
       </div>
 
       {/* Lock Confirmation Dialog */}
@@ -472,8 +406,8 @@ export const ManagerAccessControl: React.FC = () => {
 
       {/* Modal: Edit Operating Hours */}
       {editingTimingManager && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white rounded-2xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-slate-900">
               Set Access Hours for {editingTimingManager.full_name}
             </h3>
@@ -520,8 +454,8 @@ export const ManagerAccessControl: React.FC = () => {
 
       {/* Modal: Extend Hours */}
       {extendingManager && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white rounded-2xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-slate-900">
               Extend Hours for {extendingManager.full_name}
             </h3>
@@ -580,8 +514,8 @@ export const ManagerAccessControl: React.FC = () => {
 
       {/* Modal: Create Manager */}
       {isCreateOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
-          <div className="w-full max-w-md bg-white rounded-2xl p-6 shadow-2xl space-y-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="w-full max-w-md bg-white rounded-2xl p-5 sm:p-6 shadow-2xl space-y-4 max-h-[90vh] overflow-y-auto">
             <h3 className="text-lg font-bold text-slate-900 flex items-center gap-2">
               <UserPlus className="w-5 h-5 text-brand-600" />
               Create Workshop Manager Account

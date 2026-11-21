@@ -39,6 +39,18 @@
   padding-bottom: calc(0.5rem + env(safe-area-inset-bottom, 0px));
 }
 
+/* Prevent auto-zoom on inputs in iOS Safari */
+@media screen and (max-width: 767px) {
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+}
+
+/* Smooth touch scrolling */
+.touch-scroll {
+  -webkit-overflow-scrolling: touch;
+}
+
 /* Print Styles */
 @media print {
   body {
