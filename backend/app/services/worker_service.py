@@ -7,6 +7,7 @@ from fastapi import HTTPException, status
 from app.models.worker import Worker
 from app.models.item import Item
 from app.models.work_distribution import WorkDistribution
+from app.models.work_return import WorkReturn
 from app.models.material_ledger import MaterialLedgerEntry
 from app.models.payment_record import PaymentRecord
 from app.schemas.worker import (
@@ -227,23 +228,62 @@ class WorkerService:
         """Assembles a unified chronological timeline of all activities for a worker."""
         timeline: List[TimelineTransactionItem] = []
 
-        # 1. Work distributions
+        # 1. Work distributions (Issued on Date)
         distributions = db.query(WorkDistribution).filter(WorkDistribution.worker_id == worker_id).all()
         for d in distributions:
             timeline.append(
                 TimelineTransactionItem(
                     id=f"dist-{d.id}",
                     category="WORK_ISSUED",
-                    title=f"Consignment Issued: {d.batch_code}",
-                    description=f"{d.quantity_issued} pieces of {d.item_name_snapshot} ({d.knot_style} @ ₹{d.rate_per_piece}/pc)",
+                    title=f"Issued on Date: {d.quantity_issued} pcs ({d.batch_code})",
+                    description=f"{d.quantity_issued} pieces of {d.item_name_snapshot} issued on {d.issue_date.strftime('%d/%m/%Y')} (Total value: ₹{d.net_payable:.2f})",
                     amount=float(d.net_payable),
                     quantity=d.quantity_issued,
+                    remaining_quantity=d.quantity_issued,
+                    batch_code=d.batch_code,
+                    item_name=d.item_name_snapshot,
                     date=d.issue_date,
-                    status_badge=d.status
+                    status_badge=f"Issued ({d.quantity_issued} pcs)"
                 )
             )
 
-        # 2. Payments and Advances
+        # 2. Work returns (Received on Date & Remaining Received on Date)
+        returns = db.query(WorkReturn).filter(WorkReturn.worker_id == worker_id).all()
+        for r in returns:
+            dist = r.distribution
+            pending_left = dist.quantity_pending if dist else 0
+            is_final = pending_left == 0
+
+            if is_final:
+                title = f"Remaining Received: {r.quantity_returned} pcs ({dist.batch_code if dist else r.return_code})"
+                status_badge = "Remaining Received (All Done)"
+            else:
+                title = f"Received on Date: {r.quantity_returned} pcs ({dist.batch_code if dist else r.return_code})"
+                status_badge = f"{r.quantity_returned} Recv ({pending_left} Remaining)"
+
+            desc = f"{r.quantity_returned} pieces of {r.item_name_snapshot} received on {r.return_date.strftime('%d/%m/%Y')} • Earned: ₹{float(r.completed_work_value):.2f} • Remaining pending: {pending_left} pcs"
+            if r.quantity_rejected > 0:
+                desc += f" • {r.quantity_rejected} defective pieces rejected ({r.rejection_reason or 'QC defect'})"
+            if r.recorded_by_name:
+                desc += f" • Received by {r.recorded_by_name}"
+
+            timeline.append(
+                TimelineTransactionItem(
+                    id=f"ret-{r.id}",
+                    category="WORK_RETURNED",
+                    title=title,
+                    description=desc,
+                    amount=float(r.completed_work_value),
+                    quantity=r.quantity_returned,
+                    remaining_quantity=pending_left,
+                    batch_code=dist.batch_code if dist else None,
+                    item_name=r.item_name_snapshot,
+                    date=r.return_date,
+                    status_badge=status_badge
+                )
+            )
+
+        # 3. Payments and Advances
         payments = db.query(PaymentRecord).filter(PaymentRecord.worker_id == worker_id).all()
         for p in payments:
             timeline.append(
@@ -254,12 +294,15 @@ class WorkerService:
                     description=p.notes or f"Disbursed by {p.disbursed_by_name}",
                     amount=float(p.amount),
                     quantity=None,
+                    remaining_quantity=None,
+                    batch_code=None,
+                    item_name=None,
                     date=p.payment_date,
                     status_badge="Settled"
                 )
             )
 
-        # 3. Material Ledger entries
+        # 4. Material Ledger entries
         materials = db.query(MaterialLedgerEntry).filter(MaterialLedgerEntry.worker_id == worker_id).all()
         for m in materials:
             timeline.append(
@@ -270,6 +313,9 @@ class WorkerService:
                     description=f"{m.issued_qty} {m.unit} issued (Lot: {m.lot_number or 'Standard'})",
                     amount=None,
                     quantity=int(m.issued_qty) if m.unit == "pieces" else None,
+                    remaining_quantity=None,
+                    batch_code=None,
+                    item_name=m.material_type,
                     date=m.issue_date,
                     status_badge=m.status
                 )

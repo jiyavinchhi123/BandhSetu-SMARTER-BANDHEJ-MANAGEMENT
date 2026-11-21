@@ -15,38 +15,6 @@ class WorkDistributionCreate(BaseModel):
     remarks: Optional[str] = None
 
 
-class WorkDistributionResponse(BaseModel):
-    id: int
-    batch_code: str
-    worker_id: int
-    item_id: Optional[int] = None
-    item_name_snapshot: str
-    item_code_snapshot: Optional[str] = None
-    rate_per_piece: float
-    knot_style: str
-    quantity_issued: int
-    quantity_returned: int
-    quantity_rejected: int
-    quantity_pending: int
-    total_gross_wage: float
-    deductions: float
-    bonus: float
-    net_payable: float
-    issue_date: date
-    due_date: date
-    return_date: Optional[date] = None
-    status: str
-    qc_remarks: Optional[str] = None
-    remarks: Optional[str] = None
-    created_at: datetime
-
-    # Additional joined worker fields for convenience in UI tables
-    worker_name: Optional[str] = None
-    worker_serial: Optional[str] = None
-
-    model_config = ConfigDict(from_attributes=True)
-
-
 class WorkReturnCreate(BaseModel):
     distribution_id: int
     quantity_returned: int = Field(default=0, ge=0, json_schema_extra={"example": 5})  # Accepted pieces
@@ -78,6 +46,39 @@ class WorkReturnResponse(BaseModel):
     worker_name: Optional[str] = None
     worker_serial: Optional[str] = None
     batch_code: Optional[str] = None
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class WorkDistributionResponse(BaseModel):
+    id: int
+    batch_code: str
+    worker_id: int
+    item_id: Optional[int] = None
+    item_name_snapshot: str
+    item_code_snapshot: Optional[str] = None
+    rate_per_piece: float
+    knot_style: str
+    quantity_issued: int
+    quantity_returned: int
+    quantity_rejected: int
+    quantity_pending: int
+    total_gross_wage: float
+    deductions: float
+    bonus: float
+    net_payable: float
+    issue_date: date
+    due_date: date
+    return_date: Optional[date] = None
+    status: str
+    qc_remarks: Optional[str] = None
+    remarks: Optional[str] = None
+    created_at: datetime
+
+    # Additional joined worker fields for convenience in UI tables
+    worker_name: Optional[str] = None
+    worker_serial: Optional[str] = None
+    returns: List[WorkReturnResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
 

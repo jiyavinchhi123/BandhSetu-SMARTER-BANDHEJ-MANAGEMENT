@@ -115,6 +115,7 @@ export interface WorkDistributionItem {
   remarks?: string | null;
   worker_name?: string;
   worker_serial?: string;
+  returns?: WorkReturnItem[];
   created_at: string;
 }
 
@@ -256,6 +257,9 @@ export interface TimelineItem {
   description: string;
   amount?: number | null;
   quantity?: number | null;
+  remaining_quantity?: number | null;
+  batch_code?: string | null;
+  item_name?: string | null;
   date: string;
   status_badge: string;
 }

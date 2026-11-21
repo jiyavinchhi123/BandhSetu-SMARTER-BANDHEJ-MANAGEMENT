@@ -1,6 +1,7 @@
 from typing import Optional, List, Any
 from datetime import date, datetime
 from pydantic import BaseModel, Field, ConfigDict
+from app.schemas.distribution import WorkReturnResponse
 
 
 class WorkerBase(BaseModel):
@@ -80,6 +81,7 @@ class WorkDistributionResponse(BaseModel):
     knot_style: str
     quantity_issued: int
     quantity_returned: int
+    quantity_rejected: int = 0
     quantity_pending: int
     total_gross_wage: float
     deductions: float
@@ -92,6 +94,7 @@ class WorkDistributionResponse(BaseModel):
     qc_remarks: Optional[str] = None
     remarks: Optional[str] = None
     created_at: datetime
+    returns: List[WorkReturnResponse] = []
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -127,6 +130,9 @@ class TimelineTransactionItem(BaseModel):
     description: str
     amount: Optional[float] = None
     quantity: Optional[int] = None
+    remaining_quantity: Optional[int] = None
+    batch_code: Optional[str] = None
+    item_name: Optional[str] = None
     date: date
     status_badge: str
 

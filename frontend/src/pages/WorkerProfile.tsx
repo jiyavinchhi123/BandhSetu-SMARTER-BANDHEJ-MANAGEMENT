@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   ArrowLeft,
@@ -23,6 +23,8 @@ import {
   ArrowUpRight,
   ShieldCheck,
   X,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react';
 import {
   api,
@@ -32,6 +34,8 @@ import {
   PaymentItem,
   TimelineItem,
   ItemCatalogue,
+  MaterialLedgerSummary,
+  MaterialTransactionItem,
 } from '../services/api';
 import { Button, Card, Badge, Input, LoadingSpinner } from '../components/ui';
 import { ItemSearchSelect } from '../components/common/ItemSearchSelect';
@@ -64,23 +68,14 @@ export const WorkerProfile: React.FC = () => {
   const workerId = Number(id);
 
   const [worker, setWorker] = useState<WorkerItem | null>(null);
-  const [activeTab, setActiveTab] = useState<
-    | 'personal'
-    | 'material'
-    | 'distribution'
-    | 'returns'
-    | 'earnings'
-    | 'payments'
-    | 'timeline'
-  >('distribution');
-
   const [isLoading, setIsLoading] = useState(true);
 
-  // Tab Data States
+  // Data States
   const [distributions, setDistributions] = useState<WorkDistributionItem[]>([]);
   const [materials, setMaterials] = useState<MaterialLedgerItem[]>([]);
   const [payments, setPayments] = useState<PaymentItem[]>([]);
   const [timeline, setTimeline] = useState<TimelineItem[]>([]);
+  const [materialSummary, setMaterialSummary] = useState<MaterialLedgerSummary | null>(null);
 
   // Issue Work / Give Work Consignment Modal State (Step 4 Debit-Credit Ledger)
   const [isDistributeOpen, setIsDistributeOpen] = useState(false);
@@ -122,18 +117,20 @@ export const WorkerProfile: React.FC = () => {
     if (!workerId) return;
     setIsLoading(true);
     try {
-      const [w, distList, matList, payList, tlList] = await Promise.all([
+      const [w, distList, matList, payList, tlList, matSummary] = await Promise.all([
         api.getWorker(workerId),
         api.getWorkerWorkDistribution(workerId),
         api.getWorkerMaterialLedger(workerId),
         api.getWorkerPayments(workerId),
         api.getWorkerTimeline(workerId),
+        api.getMaterialDebitCreditLedger(workerId).catch(() => null),
       ]);
       setWorker(w);
       setDistributions(distList);
       setMaterials(matList);
       setPayments(payList);
       setTimeline(tlList);
+      setMaterialSummary(matSummary);
 
       // Seed edit form
       setEditName(w.full_name);
@@ -324,12 +321,82 @@ export const WorkerProfile: React.FC = () => {
     }
   };
 
+  // Memoized lists for the Two-Sided Single Structure Khata
+  // Left: RECEIVED (Work Returned) | Right: GIVEN (Work Issued)
+  const allReceivedItems = useMemo(() => {
+    const items: Array<{
+      id: string | number;
+      date: string;
+      pcs: number;
+      amount: number;
+      design: string;
+      rate: number;
+      distributionId?: number;
+      batchCode?: string;
+      returnCode?: string;
+      remarks?: string | null;
+    }> = [];
+
+    distributions.forEach((d) => {
+      if (d.returns && d.returns.length > 0) {
+        d.returns.forEach((r) => {
+          items.push({
+            id: `ret-${r.id}`,
+            date: r.return_date,
+            pcs: r.quantity_returned,
+            amount: r.completed_work_value || (r.quantity_returned * (r.rate_per_piece_snapshot || d.rate_per_piece)),
+            design: r.item_name_snapshot || d.item_name_snapshot,
+            rate: r.rate_per_piece_snapshot || d.rate_per_piece,
+            distributionId: d.id,
+            batchCode: d.batch_code,
+            returnCode: r.return_code,
+            remarks: r.remarks,
+          });
+        });
+      } else if (d.quantity_returned > 0) {
+        items.push({
+          id: `dist-ret-${d.id}`,
+          date: d.return_date || d.issue_date,
+          pcs: d.quantity_returned,
+          amount: d.quantity_returned * d.rate_per_piece,
+          design: d.item_name_snapshot,
+          rate: d.rate_per_piece,
+          distributionId: d.id,
+          batchCode: d.batch_code,
+          remarks: d.remarks,
+        });
+      }
+    });
+
+    return items.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [distributions]);
+
+  const allGivenItems = useMemo(() => {
+    return distributions.map((d) => ({
+      id: `dist-${d.id}`,
+      distObj: d,
+      date: d.issue_date,
+      pcs: d.quantity_issued,
+      amount: d.total_gross_wage || (d.quantity_issued * d.rate_per_piece),
+      design: d.item_name_snapshot,
+      rate: d.rate_per_piece,
+      batchCode: d.batch_code,
+      pendingPcs: d.quantity_pending,
+      returnedPcs: d.quantity_returned,
+      dueDate: d.due_date,
+      status: d.status,
+    })).sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [distributions]);
+
+  const totalReceivedPcs = allReceivedItems.reduce((sum, item) => sum + item.pcs, 0);
+  const totalReceivedAmount = allReceivedItems.reduce((sum, item) => sum + item.amount, 0);
+  const totalGivenPcs = allGivenItems.reduce((sum, item) => sum + item.pcs, 0);
+  const totalGivenAmount = allGivenItems.reduce((sum, item) => sum + item.amount, 0);
+  const netPendingPcs = totalGivenPcs - totalReceivedPcs;
+
   if (isLoading || !worker) {
     return <LoadingSpinner label="Loading artisan profile..." size="lg" />;
   }
-
-  // Filter returns
-  const returnBatches = distributions.filter((d) => d.quantity_returned > 0 || d.status === 'Completed');
 
   return (
     <div className="space-y-6">
@@ -468,224 +535,316 @@ export const WorkerProfile: React.FC = () => {
         </div>
       </Card>
 
-      {/* SEPARATE PROFILE TABS */}
-      <div className="border-b border-slate-200 overflow-x-auto pb-0.5">
-        <nav className="flex space-x-1 sm:space-x-2 min-w-max">
-          {[
-            { id: 'distribution', label: 'Work Distribution', count: distributions.length },
-            { id: 'material', label: 'Material Ledger', count: materials.length },
-            { id: 'returns', label: 'Work Returns', count: returnBatches.length },
-            { id: 'earnings', label: 'Earnings & Wages', count: distributions.length },
-            { id: 'payments', label: 'Advances & Payments', count: payments.length },
-            { id: 'timeline', label: 'Complete History', count: timeline.length },
-            { id: 'personal', label: 'Personal Details' },
-          ].map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id as any)}
-              className={`flex items-center gap-2 py-3 px-3.5 sm:px-4 text-xs sm:text-sm font-bold border-b-2 transition-all ${
-                activeTab === tab.id
-                  ? 'border-brand-600 text-brand-700 bg-brand-50/40 rounded-t-xl'
-                  : 'border-transparent text-slate-500 hover:text-slate-800 hover:border-slate-300'
-              }`}
-            >
-              <span>{tab.label}</span>
-              {tab.count !== undefined && (
-                <span
-                  className={`text-[10px] font-mono px-1.5 py-0.2 rounded-full ${
-                    activeTab === tab.id
-                      ? 'bg-brand-600 text-white'
-                      : 'bg-slate-200/80 text-slate-600'
-                  }`}
-                >
-                  {tab.count}
-                </span>
-              )}
-            </button>
-          ))}
-        </nav>
-      </div>
-
-      {/* TAB CONTENT PANELS */}
-
-      {/* 1. WORK DISTRIBUTION TAB (With Snapshot Rate) */}
-      {activeTab === 'distribution' && (
-        <Card className="space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h3 className="font-bold text-slate-900 text-base">Consignments & Work Batches</h3>
-              <p className="text-xs text-slate-500">
-                Fabric assigned for knotting. Rate per piece is locked as historical snapshot.
-              </p>
+      {/* 3-IN-1 SINGLE STRUCTURE: TWO-SIDED ARTISAN WORK KHATA (Received on Left, Given on Right) */}
+      <Card className="space-y-6 p-4 sm:p-6 border-slate-200 shadow-sm">
+        {/* Khata Header & Top Actions */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="p-2 rounded-xl bg-brand-100 text-brand-700">
+                <Layers className="w-5 h-5" />
+              </span>
+              <h2 className="font-extrabold text-slate-900 text-lg sm:text-xl">
+                Artisan Work & Movement Ledger (Khata)
+              </h2>
             </div>
+            <p className="text-xs text-slate-500 mt-1">
+              Single unified ledger structure: <strong>Received on Left</strong> and <strong>Given on Right</strong> in format <code className="bg-slate-100 px-1 py-0.5 rounded text-slate-700 font-mono text-[11px]">Date | No of Pcs | Amount | Name of Design</code>
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
               variant="primary"
               size="sm"
               icon={<Plus className="w-3.5 h-3.5" />}
               onClick={() => setIsDistributeOpen(true)}
+              className="bg-brand-600 hover:bg-brand-700 text-white font-bold text-xs shadow-xs"
             >
-              Issue New Batch
+              + Give Work
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<ArrowUpRight className="w-3.5 h-3.5 text-emerald-600" />}
+              onClick={() => {
+                const pendingDist = distributions.find((d) => d.quantity_pending > 0);
+                if (pendingDist) {
+                  handleOpenReceiveModal(pendingDist);
+                } else {
+                  showToast({ type: 'info', title: 'No Pending Work', message: 'All given work has been returned.' });
+                }
+              }}
+              className="border-emerald-300 text-emerald-800 bg-emerald-50 hover:bg-emerald-100 font-bold text-xs shadow-xs"
+            >
+              ↗ Receive Return
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<IndianRupee className="w-3.5 h-3.5 text-blue-600" />}
+              onClick={() => setIsPaymentOpen(true)}
+              className="border-blue-300 text-blue-800 bg-blue-50 hover:bg-blue-100 font-bold text-xs shadow-xs"
+            >
+              ₹ Record Payment
             </Button>
           </div>
+        </div>
 
-          {distributions.length === 0 ? (
-            <div className="text-center py-10 text-slate-400 text-xs">No batches issued yet.</div>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
+        {/* TWO-SIDED KHATA TABLE: LEFT = RECEIVED | RIGHT = GIVEN */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-0 border-2 border-slate-300 rounded-2xl overflow-hidden shadow-xs divide-y lg:divide-y-0 lg:divide-x-2 divide-slate-300 bg-white">
+          
+          {/* ======================================================== */}
+          {/* LEFT SIDE: RECEIVED (Work Returned by Artisan)          */}
+          {/* Format: Date | No of Pcs | Amount(auto) | Name of design*/}
+          {/* ======================================================== */}
+          <div className="flex flex-col bg-emerald-50/20">
+            <div className="bg-emerald-800 text-white px-4 py-3 flex items-center justify-between border-b border-emerald-900">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-emerald-700 text-white">
+                  <ArrowUpRight className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="font-extrabold text-sm tracking-wide block uppercase">
+                    RECEIVED (આવેલું કામ / जमा)
+                  </span>
+                  <span className="text-[11px] text-emerald-200 block">
+                    When item received from artisan
+                  </span>
+                </div>
+              </div>
+              <Badge variant="success" size="sm" className="bg-emerald-700 text-white border-emerald-600">
+                {allReceivedItems.length} Entries
+              </Badge>
+            </div>
+
+            <div className="overflow-x-auto flex-1">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase">
-                    <th className="p-3">Batch Code</th>
-                    <th className="p-3">Item Name</th>
-                    <th className="p-3">Knot Style</th>
-                    <th className="p-3 text-center">Issued</th>
-                    <th className="p-3 text-center">Pending</th>
-                    <th className="p-3 text-right">Locked Rate</th>
-                    <th className="p-3 text-right">Net Payable</th>
-                    <th className="p-3">Due Date</th>
-                    <th className="p-3 text-center">Status</th>
-                    <th className="p-3 text-right">Action</th>
+                  <tr className="bg-emerald-100/80 border-b border-emerald-200 text-[11px] font-black text-emerald-950 uppercase tracking-wider">
+                    <th className="p-3">Date</th>
+                    <th className="p-3 text-center">No of Pcs</th>
+                    <th className="p-3 text-right">Amount (Auto-Calc)</th>
+                    <th className="p-3">Name of Design</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100 font-medium">
-                  {distributions.map((d) => (
-                    <tr key={d.id} className="hover:bg-slate-50/70">
-                      <td className="p-3 font-mono font-bold text-brand-700">{d.batch_code}</td>
-                      <td className="p-3 font-semibold text-slate-800">{d.item_name_snapshot}</td>
-                      <td className="p-3 text-slate-600">{d.knot_style}</td>
-                      <td className="p-3 text-center">{d.quantity_issued}</td>
-                      <td className="p-3 text-center font-bold text-amber-700">{d.quantity_pending}</td>
-                      <td className="p-3 text-right font-mono font-bold text-slate-700">
-                        {formatINR(d.rate_per_piece)}/pc
-                      </td>
-                      <td className="p-3 text-right font-bold text-brand-700">
-                        {formatINR(d.net_payable)}
-                      </td>
-                      <td className="p-3 text-slate-500">{formatIndianDate(d.due_date)}</td>
-                      <td className="p-3 text-center">
-                        <Badge
-                          variant={d.status === 'Completed' ? 'success' : 'warning'}
-                          size="sm"
-                          dot
-                        >
-                          {d.status}
-                        </Badge>
-                      </td>
-                      <td className="p-3 text-right">
-                        {d.quantity_pending > 0 ? (
-                          <button
-                            onClick={() => handleOpenReceiveModal(d)}
-                            className="px-2.5 py-1 text-xs font-semibold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg inline-flex items-center gap-1 transition-colors shadow-2xs"
-                          >
-                            <ArrowUpRight className="w-3.5 h-3.5" />
-                            Receive Return
-                          </button>
-                        ) : (
-                          <span className="text-xs text-slate-400 font-normal">Completed</span>
-                        )}
+                <tbody className="divide-y divide-emerald-100/90 font-medium">
+                  {allReceivedItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="p-8 text-center text-slate-400 text-xs italic">
+                        No pieces received yet from artisan. Click "Receive Return" above to record returns.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    allReceivedItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-emerald-50/80 transition-colors">
+                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">
+                          {formatIndianDate(item.date)}
+                        </td>
+                        <td className="p-3 text-center">
+                          <span className="font-black text-emerald-800 text-xs bg-emerald-100 px-2.5 py-0.5 rounded-full inline-block border border-emerald-200">
+                            {item.pcs} pcs
+                          </span>
+                        </td>
+                        <td className="p-3 text-right font-black text-emerald-800 font-mono text-sm">
+                          {formatINR(item.amount)}
+                        </td>
+                        <td className="p-3">
+                          <span className="font-extrabold text-slate-900 block">{item.design}</span>
+                          <span className="text-[10px] text-slate-400 font-mono">
+                            @{formatINR(item.rate)}/pc {item.returnCode ? `• ${item.returnCode}` : ''}
+                          </span>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
-          )}
-        </Card>
-      )}
 
-      {/* 2. MATERIAL LEDGER TAB (Double-Entry Debit/Credit with Legend) */}
-      {activeTab === 'material' && (
-        <div className="space-y-6">
-          <MaterialDebitCreditLedger initialWorkerId={worker.id} showWorkerSelector={false} />
-        </div>
-      )}
-
-      {/* 3. WORK RETURNS TAB */}
-      {activeTab === 'returns' && (
-        <Card className="space-y-4">
-          <div>
-            <h3 className="font-bold text-slate-900 text-base">Completed Knotting Returns</h3>
-            <p className="text-xs text-slate-500">Inspection & return verification of finished pieces</p>
+            {/* Left Side (Received) Totals Footer */}
+            <div className="bg-emerald-100 border-t-2 border-emerald-300 p-3 flex items-center justify-between text-xs font-black text-emerald-950">
+              <span className="uppercase tracking-wider">TOTAL RECEIVED:</span>
+              <div className="flex items-center gap-4">
+                <span className="bg-emerald-200/80 px-2.5 py-0.5 rounded-full text-emerald-900">
+                  {totalReceivedPcs} pcs
+                </span>
+                <span className="text-base font-black text-emerald-950 font-mono">
+                  {formatINR(totalReceivedAmount)}
+                </span>
+              </div>
+            </div>
           </div>
 
-          {returnBatches.length === 0 ? (
-            <div className="text-center py-10 text-slate-400 text-xs">
-              No finished returns registered yet.
+          {/* ======================================================== */}
+          {/* RIGHT SIDE: GIVEN (Work Issued to Artisan)               */}
+          {/* Format: Date | No of Pcs | Amount(auto) | Name of design*/}
+          {/* ======================================================== */}
+          <div className="flex flex-col bg-rose-50/20">
+            <div className="bg-rose-800 text-white px-4 py-3 flex items-center justify-between border-b border-rose-900">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-rose-700 text-white">
+                  <ArrowDownLeft className="w-4 h-4" />
+                </div>
+                <div>
+                  <span className="font-extrabold text-sm tracking-wide block uppercase">
+                    GIVEN (આપેલું કામ / उधार)
+                  </span>
+                  <span className="text-[11px] text-rose-200 block">
+                    When item given to artisan
+                  </span>
+                </div>
+              </div>
+              <Badge variant="danger" size="sm" className="bg-rose-700 text-white border-rose-600">
+                {allGivenItems.length} Batches
+              </Badge>
             </div>
-          ) : (
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
+
+            <div className="overflow-x-auto flex-1">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
-                  <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase">
-                    <th className="p-3">Batch Code</th>
-                    <th className="p-3">Item</th>
-                    <th className="p-3 text-center">Pieces Returned</th>
-                    <th className="p-3">Return Date</th>
-                    <th className="p-3">Quality Remarks</th>
-                    <th className="p-3 text-center">Status</th>
+                  <tr className="bg-rose-100/80 border-b border-rose-200 text-[11px] font-black text-rose-950 uppercase tracking-wider">
+                    <th className="p-3">Date</th>
+                    <th className="p-3 text-center">No of Pcs</th>
+                    <th className="p-3 text-right">Amount (Auto-Calc)</th>
+                    <th className="p-3">Name of Design</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {returnBatches.map((r) => (
-                    <tr key={r.id}>
-                      <td className="p-3 font-mono font-bold text-brand-700">{r.batch_code}</td>
-                      <td className="p-3 font-semibold text-slate-800">{r.item_name_snapshot}</td>
-                      <td className="p-3 text-center font-bold text-emerald-700">
-                        {r.quantity_returned} / {r.quantity_issued}
-                      </td>
-                      <td className="p-3 text-slate-500">
-                        {r.return_date ? formatIndianDate(r.return_date) : 'Pending final check'}
-                      </td>
-                      <td className="p-3 text-slate-600">{r.qc_remarks || 'Knot density verified'}</td>
-                      <td className="p-3 text-center">
-                        <Badge variant="success" size="sm">
-                          {r.status}
-                        </Badge>
+                <tbody className="divide-y divide-rose-100/90 font-medium">
+                  {allGivenItems.length === 0 ? (
+                    <tr>
+                      <td colSpan={4} className="p-8 text-center text-slate-400 text-xs italic">
+                        No items given yet to artisan. Click "+ Give Work" above to assign fabric.
                       </td>
                     </tr>
-                  ))}
+                  ) : (
+                    allGivenItems.map((item) => (
+                      <tr key={item.id} className="hover:bg-rose-50/80 transition-colors">
+                        <td className="p-3 font-semibold text-slate-700 whitespace-nowrap">
+                          {formatIndianDate(item.date)}
+                        </td>
+                        <td className="p-3 text-center">
+                          <span className="font-black text-rose-800 text-xs bg-rose-100 px-2.5 py-0.5 rounded-full inline-block border border-rose-200">
+                            {item.pcs} pcs
+                          </span>
+                          {item.pendingPcs > 0 && (
+                            <span className="text-[10px] text-amber-800 font-extrabold mt-0.5 block">
+                              ({item.pendingPcs} pending)
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right font-black text-rose-800 font-mono text-sm">
+                          {formatINR(item.amount)}
+                        </td>
+                        <td className="p-3">
+                          <div className="flex items-center justify-between gap-2">
+                            <div>
+                              <span className="font-extrabold text-slate-900 block">{item.design}</span>
+                              <span className="text-[10px] text-slate-400 font-mono">
+                                @{formatINR(item.rate)}/pc • {item.batchCode}
+                              </span>
+                            </div>
+                            {item.pendingPcs > 0 && (
+                              <button
+                                onClick={() => handleOpenReceiveModal(item.distObj)}
+                                className="px-2 py-1 text-[11px] font-bold text-emerald-800 bg-emerald-100 hover:bg-emerald-200 rounded-md transition-colors shrink-0 border border-emerald-300"
+                                title="Receive knots for this batch"
+                              >
+                                Receive
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
                 </tbody>
               </table>
             </div>
-          )}
-        </Card>
-      )}
 
-      {/* 4. EARNINGS & MONEY LEDGER TAB */}
-      {activeTab === 'earnings' && (
-        <div className="space-y-6">
-          <MoneyDebitCreditLedger initialWorkerId={worker.id} showWorkerSelector={false} />
+            {/* Right Side (Given) Totals Footer */}
+            <div className="bg-rose-100 border-t-2 border-rose-300 p-3 flex items-center justify-between text-xs font-black text-rose-950">
+              <span className="uppercase tracking-wider">TOTAL GIVEN:</span>
+              <div className="flex items-center gap-4">
+                <span className="bg-rose-200/80 px-2.5 py-0.5 rounded-full text-rose-900">
+                  {totalGivenPcs} pcs
+                </span>
+                <span className="text-base font-black text-rose-950 font-mono">
+                  {formatINR(totalGivenAmount)}
+                </span>
+              </div>
+            </div>
+          </div>
         </div>
-      )}
 
-      {/* 5. ADVANCES & PAYMENTS TAB */}
-      {activeTab === 'payments' && (
-        <Card className="space-y-4">
-          <div className="flex items-center justify-between">
+        {/* NET RECONCILIATION SUMMARY BAR */}
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-amber-50 via-slate-50 to-emerald-50 border border-slate-300 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-900 flex items-center justify-center font-bold shrink-0">
+              <Package className="w-5 h-5" />
+            </div>
             <div>
-              <h3 className="font-bold text-slate-900 text-base">Advances & Wage Disbursements</h3>
-              <p className="text-xs text-slate-500">Direct cash and bank/UPI payout register</p>
+              <p className="font-bold text-slate-800 text-sm">
+                Net Pending Material with Artisan:{' '}
+                <span className="text-amber-900 font-black">{netPendingPcs} Pieces</span>
+              </p>
+              <p className="text-slate-500 text-[11px] mt-0.5">
+                Formula: Total Given ({totalGivenPcs} pcs) − Total Received ({totalReceivedPcs} pcs) = {netPendingPcs} pcs remaining
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-6 sm:self-center border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-200">
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Total Work Value Given</span>
+              <span className="font-mono font-bold text-rose-800 text-sm">{formatINR(totalGivenAmount)}</span>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Wages Earned (Received)</span>
+              <span className="font-mono font-bold text-emerald-800 text-sm">{formatINR(totalReceivedAmount)}</span>
+            </div>
+            <div>
+              <span className="text-[10px] uppercase font-bold text-slate-400 block">Payable Balance</span>
+              <span className="font-mono font-extrabold text-brand-700 text-base">{formatINR(worker.payable_balance)}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* INTEGRATED SECTION 2: WAGE DISBURSEMENTS & CASH ADVANCES */}
+        <div className="pt-4 border-t border-slate-200 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+                <IndianRupee className="w-4 h-4 text-emerald-600" />
+                Payments & Cash Advances Ledger
+              </h3>
+              <p className="text-[11px] text-slate-500">
+                Wage payments disbursed and cash/UPI advances given to {worker.full_name}.
+              </p>
             </div>
             <Button
-              variant="primary"
+              variant="outline"
               size="sm"
               icon={<Plus className="w-3.5 h-3.5" />}
               onClick={() => setIsPaymentOpen(true)}
+              className="font-bold text-xs self-start sm:self-auto"
             >
-              Record Payment
+              + Record Payment / Advance
             </Button>
           </div>
 
           {payments.length === 0 ? (
-            <div className="text-center py-10 text-slate-400 text-xs">No payments recorded yet.</div>
+            <div className="p-6 text-center text-slate-400 text-xs italic bg-slate-50 rounded-xl border border-slate-200">
+              No payments recorded yet for this artisan.
+            </div>
           ) : (
             <div className="overflow-x-auto rounded-xl border border-slate-200">
               <table className="w-full text-left border-collapse text-xs">
                 <thead>
                   <tr className="bg-slate-50 border-b border-slate-200 text-[11px] font-bold text-slate-500 uppercase">
                     <th className="p-3">Payment Date</th>
-                    <th className="p-3">Type</th>
-                    <th className="p-3 text-right">Amount Disbursed</th>
+                    <th className="p-3">Category</th>
+                    <th className="p-3 text-right">Amount</th>
                     <th className="p-3">Mode</th>
                     <th className="p-3">Receipt / Ref No</th>
                     <th className="p-3">Authorized By</th>
@@ -694,7 +853,7 @@ export const WorkerProfile: React.FC = () => {
                 </thead>
                 <tbody className="divide-y divide-slate-100 font-medium">
                   {payments.map((p) => (
-                    <tr key={p.id} className="hover:bg-slate-50/70">
+                    <tr key={p.id} className="hover:bg-slate-50/70 transition-colors">
                       <td className="p-3 text-slate-600">{formatIndianDate(p.payment_date)}</td>
                       <td className="p-3">
                         <Badge
@@ -704,11 +863,11 @@ export const WorkerProfile: React.FC = () => {
                           {p.payment_type}
                         </Badge>
                       </td>
-                      <td className="p-3 text-right font-extrabold text-emerald-700 text-sm">
+                      <td className="p-3 text-right font-extrabold text-emerald-700 text-sm font-mono">
                         {formatINR(p.amount)}
                       </td>
                       <td className="p-3 text-slate-700 font-bold">{p.payment_mode}</td>
-                      <td className="p-3 font-mono text-slate-500">{p.reference_no || 'Cash Ledger'}</td>
+                      <td className="p-3 font-mono text-slate-500 text-[11px]">{p.reference_no || 'Cash Ledger'}</td>
                       <td className="p-3 text-slate-600">{p.disbursed_by_name}</td>
                       <td className="p-3 text-slate-400 truncate max-w-xs">{p.notes || '—'}</td>
                     </tr>
@@ -717,100 +876,107 @@ export const WorkerProfile: React.FC = () => {
               </table>
             </div>
           )}
-        </Card>
-      )}
+        </div>
 
-      {/* 6. COMPLETE TRANSACTION HISTORY TAB */}
-      {activeTab === 'timeline' && (
-        <Card className="space-y-4">
+        {/* INTEGRATED SECTION 3: RECENT ACTIVITY TIMELINE */}
+        <div className="pt-4 border-t border-slate-200 space-y-3">
           <div>
-            <h3 className="font-bold text-slate-900 text-base">Unified Chronological Audit Trail</h3>
-            <p className="text-xs text-slate-500">Every consignment, return, fabric receipt, and payout in sequence</p>
+            <h3 className="font-bold text-slate-900 text-sm flex items-center gap-2">
+              <History className="w-4 h-4 text-brand-600" />
+              Chronological Audit Trail
+            </h3>
+            <p className="text-[11px] text-slate-500">
+              Unified chronological timeline of work dispatches, returns, and cash disbursements.
+            </p>
           </div>
 
-          <div className="space-y-3 pt-2">
-            {timeline.map((item) => (
-              <div
-                key={item.id}
-                className="flex items-start gap-4 p-3.5 rounded-xl border border-slate-100 bg-slate-50/60 hover:bg-slate-50 transition-colors"
-              >
-                <div className="w-10 h-10 rounded-xl bg-white border border-slate-200 flex items-center justify-center text-slate-700 shrink-0 shadow-2xs">
-                  {item.category === 'WORK_ISSUED' && <Layers className="w-5 h-5 text-brand-600" />}
-                  {item.category === 'PAYMENT_DISBURSED' && <IndianRupee className="w-5 h-5 text-emerald-600" />}
-                  {item.category === 'ADVANCE_GIVEN' && <IndianRupee className="w-5 h-5 text-amber-600" />}
-                  {item.category === 'MATERIAL_ISSUED' && <Package className="w-5 h-5 text-indigo-600" />}
-                </div>
+          {timeline.length === 0 ? (
+            <div className="p-6 text-center text-slate-400 text-xs italic bg-slate-50 rounded-xl border border-slate-200">
+              No activity logged yet.
+            </div>
+          ) : (
+            <div className="space-y-2.5">
+              {timeline.map((item) => {
+                const isIssued = item.category === 'WORK_ISSUED';
+                const isReturned = item.category === 'WORK_RETURNED';
+                const isRemaining = isReturned && item.remaining_quantity === 0;
+                const isPayment = item.category === 'PAYMENT_DISBURSED';
+                const isAdvance = item.category === 'ADVANCE_GIVEN';
 
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <p className="font-bold text-slate-900 text-sm">{item.title}</p>
-                    <span className="text-[11px] font-semibold text-slate-400">
-                      {formatIndianDate(item.date)}
-                    </span>
+                return (
+                  <div
+                    key={item.id}
+                    className="p-3 rounded-xl border border-slate-200 bg-white hover:bg-slate-50/70 transition-colors flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs"
+                  >
+                    <div className="flex items-start gap-3">
+                      <div
+                        className={`p-2 rounded-xl shrink-0 ${
+                          isIssued
+                            ? 'bg-rose-50 text-rose-600'
+                            : isRemaining
+                            ? 'bg-emerald-600 text-white'
+                            : isReturned
+                            ? 'bg-emerald-50 text-emerald-600'
+                            : isAdvance
+                            ? 'bg-amber-50 text-amber-600'
+                            : 'bg-blue-50 text-blue-600'
+                        }`}
+                      >
+                        {isIssued && <ArrowDownLeft className="w-3.5 h-3.5" />}
+                        {isReturned && (isRemaining ? <CheckCircle2 className="w-3.5 h-3.5" /> : <ArrowUpRight className="w-3.5 h-3.5" />)}
+                        {(isPayment || isAdvance) && <IndianRupee className="w-3.5 h-3.5" />}
+                        {!isIssued && !isReturned && !isPayment && !isAdvance && <Clock className="w-3.5 h-3.5" />}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-slate-800 text-xs sm:text-sm">{item.title}</span>
+                          <Badge
+                            variant={
+                              isIssued
+                                ? 'danger'
+                                : isRemaining
+                                ? 'success'
+                                : isReturned
+                                ? 'success'
+                                : isAdvance
+                                ? 'warning'
+                                : 'neutral'
+                            }
+                            size="sm"
+                          >
+                            {item.status_badge}
+                          </Badge>
+                        </div>
+                        <p className="text-slate-500 text-[11px] mt-0.5">{item.description}</p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0 sm:self-center">
+                      <span className="text-[11px] font-semibold text-slate-400 block">
+                        {formatIndianDate(item.date)}
+                      </span>
+                      {item.amount && (
+                        <p
+                          className={`font-bold text-xs mt-0.5 font-mono ${
+                            isIssued
+                              ? 'text-slate-700'
+                              : isReturned
+                              ? 'text-emerald-700'
+                              : isAdvance
+                              ? 'text-amber-700'
+                              : 'text-blue-700'
+                          }`}
+                        >
+                          {formatINR(item.amount)}
+                        </p>
+                      )}
+                    </div>
                   </div>
-                  <p className="text-xs text-slate-500 mt-0.5">{item.description}</p>
-                </div>
-
-                {item.amount && (
-                  <div className="text-right shrink-0">
-                    <span className="text-xs font-bold text-slate-900">{formatINR(item.amount)}</span>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-        </Card>
-      )}
-
-      {/* 7. PERSONAL DETAILS TAB */}
-      {activeTab === 'personal' && (
-        <Card className="space-y-4 max-w-2xl">
-          <div className="flex items-center justify-between border-b pb-3">
-            <h3 className="font-bold text-slate-900 text-base">Artisan Master Record</h3>
-            <Button
-              variant="outline"
-              size="sm"
-              icon={<Edit className="w-3.5 h-3.5" />}
-              onClick={() => setIsEditOpen(true)}
-            >
-              Edit Details
-            </Button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-4 text-xs">
-            <div>
-              <p className="text-slate-400 font-semibold">Serial Number</p>
-              <p className="font-mono font-bold text-brand-700 text-sm mt-0.5">{worker.serial_number}</p>
+                );
+              })}
             </div>
-            <div>
-              <p className="text-slate-400 font-semibold">Active Status</p>
-              <p className="font-bold text-slate-800 mt-0.5">{worker.status}</p>
-            </div>
-            <div>
-              <p className="text-slate-400 font-semibold">Full Name</p>
-              <p className="font-bold text-slate-900 mt-0.5">{worker.full_name}</p>
-            </div>
-            <div>
-              <p className="text-slate-400 font-semibold">Mobile Number</p>
-              <p className="font-mono font-bold text-slate-800 mt-0.5">{worker.phone}</p>
-            </div>
-            <div>
-              <p className="text-slate-400 font-semibold">Town</p>
-              <p className="font-bold text-slate-800 mt-0.5">{worker.town}</p>
-            </div>
-            <div>
-              <p className="text-slate-400 font-semibold">Address</p>
-              <p className="font-bold text-slate-800 mt-0.5">{worker.address || '—'}</p>
-            </div>
-            <div className="col-span-2">
-              <p className="text-slate-400 font-semibold">Remarks & Craft Specialization</p>
-              <p className="text-slate-700 bg-slate-50 p-2.5 rounded-xl border border-slate-100 mt-1">
-                {worker.remarks || 'No additional remarks recorded.'}
-              </p>
-            </div>
-          </div>
-        </Card>
-      )}
+          )}
+        </div>
+      </Card>
 
       {/* MODAL: GIVE WORK / MATERIAL DISTRIBUTION FORM (Exact match to Work Batches Give Work Form) */}
       {isDistributeOpen && (
