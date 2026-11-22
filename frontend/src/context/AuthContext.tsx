@@ -12,6 +12,7 @@ interface AuthContextType {
   login: (identifier: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
+  updateUserSession: (updatedUser: UserProfile, newToken?: string | null) => void;
   clearLockout: () => void;
 }
 
@@ -178,6 +179,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setLockMessage(null);
   };
 
+  const updateUserSession = useCallback((updatedUser: UserProfile, newToken?: string | null) => {
+    setUser(updatedUser);
+    if (newToken) {
+      localStorage.setItem('bandhej_auth_token', newToken);
+      setToken(newToken);
+    }
+  }, []);
+
   return (
     <AuthContext.Provider
       value={{
@@ -191,6 +200,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         login,
         logout,
         refreshUser,
+        updateUserSession,
         clearLockout,
       }}
     >

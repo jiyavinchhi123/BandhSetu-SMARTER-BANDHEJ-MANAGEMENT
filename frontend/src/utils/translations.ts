@@ -45,6 +45,118 @@ export const translations: Translations = {
     en: 'Settings',
     gu: 'સેટિંગ્સ',
   },
+  settings_title: {
+    en: 'Settings',
+    gu: 'સેટિંગ્સ',
+  },
+  credentials_update_title: {
+    en: 'Login Credentials & Profile',
+    gu: 'લૉગિન ઓળખપત્રો અને પ્રોફાઇલ',
+  },
+  credentials_update_subtitle: {
+    en: 'Update Name, Mobile No, Email ID, and Password',
+    gu: 'નામ, મોબાઇલ નંબર, ઇમેઇલ આઇડી અને પાસવર્ડ બદલો',
+  },
+  field_full_name: {
+    en: 'Update Name (Full Name)',
+    gu: 'નામ સુધારો (પૂરું નામ)',
+  },
+  field_mobile_no: {
+    en: 'Mobile No',
+    gu: 'મોબાઇલ નંબર',
+  },
+  field_email_id: {
+    en: 'Email ID',
+    gu: 'ઇમેઇલ આઇડી',
+  },
+  field_old_password: {
+    en: 'Current (Old) Password',
+    gu: 'વર્તમાન (જૂનો) પાસવર્ડ',
+  },
+  old_password_hint: {
+    en: 'Required only when changing password',
+    gu: 'ફક્ત પાસવર્ડ બદલતી વખતે જરૂરી',
+  },
+  field_new_password: {
+    en: 'New Password',
+    gu: 'નવો પાસવર્ડ',
+  },
+  field_confirm_password: {
+    en: 'Confirm New Password',
+    gu: 'પાસવર્ડ ફરીથી લખો',
+  },
+  password_hint: {
+    en: 'Leave password blank if you do not want to change it.',
+    gu: 'જો પાસવર્ડ ન બદલવો હોય તો આ ખાનું ખાલી રાખો.',
+  },
+  save_credentials_btn: {
+    en: 'Update Login Credentials',
+    gu: 'લૉગિન ઓળખપત્રો સાચવો',
+  },
+  register_manager_title: {
+    en: 'Manager Registration',
+    gu: 'મેનેજર નોંધણી (રજીસ્ટ્રેશન)',
+  },
+  register_manager_desc: {
+    en: 'Register as an authorized manager. Requires Admin approval before first login.',
+    gu: 'વર્કશોપ મેનેજર તરીકે નોંધણી કરો. લૉગિન કરવા માટે એડમિનની મંજૂરી જરૂરી છે.',
+  },
+  dont_have_account: {
+    en: "Don't have an account? Register as Manager",
+    gu: 'ખાતું નથી? મેનેજર તરીકે રજીસ્ટ્રેશન કરો',
+  },
+  already_have_account: {
+    en: 'Already have an account? Sign In',
+    gu: 'પહેલેથી એકાઉન્ટ છે? લૉગિન કરો',
+  },
+  approval_notice: {
+    en: 'Manager accounts can access the workshop only after Admin approval.',
+    gu: 'એડમિન દ્વારા મંજૂર થયા પછી જ મેનેજર એકાઉન્ટ વડે લૉગિન કરી શકાશે.',
+  },
+  registration_success_msg: {
+    en: 'Registration submitted! Your account is pending Admin approval.',
+    gu: 'રજીસ્ટ્રેશન સબમિટ થયું! તમારું એકાઉન્ટ એડમિનની મંજૂરી માટે બાકી છે.',
+  },
+  approve_manager_btn: {
+    en: 'Approve Manager',
+    gu: 'મંજૂર કરો',
+  },
+  decline_manager_btn: {
+    en: 'Decline',
+    gu: 'અસ્વીકાર',
+  },
+  pending_approval_badge: {
+    en: 'PENDING APPROVAL',
+    gu: 'મંજૂરી બાકી',
+  },
+  approved_success_msg: {
+    en: 'Manager approved successfully! They can now log in.',
+    gu: 'મેનેજર સફળતાપૂર્વક મંજૂર થયા! હવે તેઓ લૉગિન કરી શકશે.',
+  },
+  business_localization_title: {
+    en: 'Business & Regional Localization',
+    gu: 'વ્યવસાય અને પ્રાદેશિક સેટિંગ્સ',
+  },
+  business_name: {
+    en: 'Business Name',
+    gu: 'વ્યવસાયનું નામ',
+  },
+  default_currency: {
+    en: 'Default Currency',
+    gu: 'ચલણ',
+  },
+  timezone_label: {
+    en: 'Timezone',
+    gu: 'સમય ક્ષેત્ર (ટાઈમઝોન)',
+  },
+  allowed_wastage: {
+    en: 'Allowed Fabric Wastage (%)',
+    gu: 'કાપડ બગાડ મર્યાદા (%)',
+  },
+  save_preferences_btn: {
+    en: 'Save Preferences',
+    gu: 'પસંદગી સાચવો',
+  },
   sign_out: {
     en: 'Sign Out',
     gu: 'લોગ આઉટ',
@@ -816,8 +928,8 @@ export const translations: Translations = {
     gu: 'કારીગરનું નામ (A-Z)',
   },
   create_manager: {
-    en: '+ Create Manager',
-    gu: '+ મેનેજર ઉમેરો',
+    en: 'Create Manager',
+    gu: 'મેનેજર ઉમેરો',
   },
   operational_status: {
     en: 'OPERATIONAL',

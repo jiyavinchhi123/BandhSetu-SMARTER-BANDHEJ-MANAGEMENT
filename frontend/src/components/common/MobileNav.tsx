@@ -20,12 +20,18 @@ export const MobileNav: React.FC = () => {
   const { role, logout } = useAuth();
   const [isMoreOpen, setIsMoreOpen] = useState(false);
 
-  const mobileNavItems = [
-    { name: t('dashboard', 'Home'), path: '/', icon: LayoutDashboard },
-    { name: t('artisan_workers', 'Workers'), path: '/workers', icon: Users },
-    { name: t('item_catalogue', 'Items'), path: '/items', icon: Tag },
-    { name: t('reports_analytics', 'Reports'), path: '/reports', icon: BarChart3 },
-  ];
+  const mobileNavItems =
+    role === 'admin'
+      ? [
+          { name: t('dashboard', 'Home'), path: '/', icon: LayoutDashboard },
+          { name: t('artisan_workers', 'Workers'), path: '/workers', icon: Users },
+          { name: t('item_catalogue', 'Items'), path: '/items', icon: Tag },
+          { name: t('reports_analytics', 'Reports'), path: '/reports', icon: BarChart3 },
+        ]
+      : [
+          { name: t('artisan_workers', 'Workers'), path: '/workers', icon: Users },
+          { name: t('settings', 'Settings'), path: '/settings', icon: Settings },
+        ];
 
   return (
     <>
@@ -108,25 +114,24 @@ export const MobileNav: React.FC = () => {
 
             <div className="space-y-1">
               {role === 'admin' && (
-                <>
-                  <NavLink
-                    to="/managers"
-                    onClick={() => setIsMoreOpen(false)}
-                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors"
-                  >
-                    <ShieldAlert className="w-5 h-5 text-amber-600" />
-                    <span>{t('manager_access', 'Manager Access')}</span>
-                  </NavLink>
-                  <NavLink
-                    to="/settings"
-                    onClick={() => setIsMoreOpen(false)}
-                    className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors"
-                  >
-                    <Settings className="w-5 h-5 text-slate-600" />
-                    <span>{t('settings', 'Settings')}</span>
-                  </NavLink>
-                </>
+                <NavLink
+                  to="/managers"
+                  onClick={() => setIsMoreOpen(false)}
+                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors"
+                >
+                  <ShieldAlert className="w-5 h-5 text-amber-600" />
+                  <span>{t('manager_access', 'Manager Access')}</span>
+                </NavLink>
               )}
+
+              <NavLink
+                to="/settings"
+                onClick={() => setIsMoreOpen(false)}
+                className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors"
+              >
+                <Settings className="w-5 h-5 text-slate-600" />
+                <span>{t('settings', 'Settings')}</span>
+              </NavLink>
 
               <button
                 type="button"

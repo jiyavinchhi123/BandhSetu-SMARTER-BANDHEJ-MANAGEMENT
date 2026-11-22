@@ -51,6 +51,13 @@ class ManagerCreateRequest(BaseModel):
     access_end_time: str = Field(default="20:00", pattern=r"^\d{2}:\d{2}$")
 
 
+class ManagerRegisterRequest(BaseModel):
+    full_name: str = Field(..., min_length=2, description="Manager full name")
+    phone: str = Field(..., min_length=10, description="Mobile number")
+    email: str = Field(..., min_length=5, description="Email address")
+    password: str = Field(..., min_length=4, description="Password")
+
+
 class ManagerTimingUpdateRequest(BaseModel):
     access_start_time: str = Field(..., pattern=r"^\d{2}:\d{2}$", json_schema_extra={"example": "09:00"})
     access_end_time: str = Field(..., pattern=r"^\d{2}:\d{2}$", json_schema_extra={"example": "20:00"})
@@ -68,6 +75,20 @@ class ManagerLockRequest(BaseModel):
 class PasswordResetRequest(BaseModel):
     identifier: str
     new_password: str = Field(..., min_length=6)
+
+
+class ProfileUpdateRequest(BaseModel):
+    full_name: Optional[str] = Field(None, min_length=2, description="User full name")
+    phone: Optional[str] = Field(None, min_length=7, description="Mobile number")
+    email: Optional[str] = Field(None, min_length=5, description="Email address")
+    password: Optional[str] = Field(None, min_length=4, description="New password")
+    old_password: Optional[str] = Field(None, description="Current/old password for verification")
+
+
+class ProfileUpdateResponse(BaseModel):
+    user: UserResponse
+    access_token: Optional[str] = None
+    message: str
 
 
 class AuditLogResponse(BaseModel):

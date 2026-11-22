@@ -257,6 +257,74 @@ def extend_manager_hours(
     return manager
 
 
+@router.post("/{manager_id}/approve", response_model=UserResponse, summary="Approve pending Manager account (Admin Only)")
+def approve_manager(
+    manager_id: int,
+    request: Request,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Admin approves a registered manager account.
+    Activates account, clears pending status, and allows login within operating window.
+    """
+    manager = db.query(User).filter(User.id == manager_id, User.role == "manager").first()
+    if not manager:
+        raise HTTPException(status_code=404, detail="Manager account not found.")
+
+    manager.is_active = True
+    manager.is_locked = False
+    manager.lock_reason = None
+    manager.token_version += 1
+    db.commit()
+    db.refresh(manager)
+
+    client_ip = request.client.host if request.client else "unknown"
+    access_control_service.log_audit(
+        db=db,
+        action="MANAGER_APPROVED",
+        user_id=admin_user.id,
+        user_email=admin_user.email,
+        user_role="admin",
+        ip_address=client_ip,
+        details=f"Admin approved manager account {manager.email} ({manager.full_name})."
+    )
+
+    return manager
+
+
+@router.delete("/{manager_id}", summary="Delete or decline manager account (Admin Only)")
+def delete_manager(
+    manager_id: int,
+    request: Request,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """Admin removes or declines a manager account."""
+    manager = db.query(User).filter(User.id == manager_id, User.role == "manager").first()
+    if not manager:
+        raise HTTPException(status_code=404, detail="Manager account not found.")
+
+    client_ip = request.client.host if request.client else "unknown"
+    mgr_email = manager.email
+
+    db.query(AuditLog).filter(AuditLog.user_id == manager.id).delete()
+    db.delete(manager)
+    db.commit()
+
+    access_control_service.log_audit(
+        db=db,
+        action="MANAGER_DELETED",
+        user_id=admin_user.id,
+        user_email=admin_user.email,
+        user_role="admin",
+        ip_address=client_ip,
+        details=f"Admin removed manager account {mgr_email}."
+    )
+
+    return {"message": f"Manager account {mgr_email} was deleted successfully."}
+
+
 @router.get("/audit-logs/all", response_model=List[AuditLogResponse], summary="Get System Security Audit Logs (Admin Only)")
 def get_all_audit_logs(
     limit: int = 50,

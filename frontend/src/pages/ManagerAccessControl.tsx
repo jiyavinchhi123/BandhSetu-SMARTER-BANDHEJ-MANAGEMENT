@@ -132,6 +132,57 @@ export const ManagerAccessControl: React.FC = () => {
     }
   };
 
+  // Approve Pending Manager
+  const [approvingManagerId, setApprovingManagerId] = useState<number | null>(null);
+  const handleApproveManager = async (manager: UserProfile) => {
+    setApprovingManagerId(manager.id);
+    try {
+      const updated = await api.approveManager(manager.id);
+      setManagers((prev) => prev.map((m) => (m.id === updated.id ? updated : m)));
+      showToast({
+        type: 'success',
+        title: language === 'gu' ? 'મેનેજર મંજૂર થયા' : 'Manager Approved',
+        message:
+          language === 'gu'
+            ? `${updated.full_name} હવે વર્કશોપમાં લૉગિન કરી શકશે.`
+            : `${updated.full_name} has been approved and can now log in within operating hours.`,
+      });
+      loadData();
+    } catch (err: any) {
+      showToast({ type: 'error', title: 'Approval Failed', message: err.message });
+    } finally {
+      setApprovingManagerId(null);
+    }
+  };
+
+  // Delete / Decline Manager
+  const [deletingManagerId, setDeletingManagerId] = useState<number | null>(null);
+  const handleDeleteManager = async (manager: UserProfile) => {
+    if (
+      !window.confirm(
+        language === 'gu'
+          ? `શું તમે ખરેખર ${manager.full_name} નું એકાઉન્ટ રદ / કાઢી નાખવા માંગો છો?`
+          : `Are you sure you want to decline and remove ${manager.full_name}?`
+      )
+    )
+      return;
+
+    setDeletingManagerId(manager.id);
+    try {
+      await api.deleteManager(manager.id);
+      showToast({
+        type: 'info',
+        title: language === 'gu' ? 'એકાઉન્ટ રદ કર્યું' : 'Manager Removed',
+        message: `${manager.full_name} account was removed.`,
+      });
+      loadData();
+    } catch (err: any) {
+      showToast({ type: 'error', title: 'Action Failed', message: err.message });
+    } finally {
+      setDeletingManagerId(null);
+    }
+  };
+
   // Save Timings
   const handleSaveTiming = async () => {
     if (!editingTimingManager) return;
@@ -236,14 +287,37 @@ export const ManagerAccessControl: React.FC = () => {
             icon={<Plus className="w-3.5 h-3.5" />}
             onClick={() => setIsCreateOpen(true)}
           >
-            {t('create_manager', '+ Create Manager')}
+            {t('create_manager', 'Create Manager')}
           </Button>
         </div>
       </div>
 
       {/* Managers Card List */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {managers.map((m) => {
+      {managers.length === 0 ? (
+        <Card className="text-center py-12 border-dashed">
+          <ShieldAlert className="w-12 h-12 text-slate-300 mx-auto mb-3" />
+          <h3 className="text-base font-semibold text-slate-800">
+            {language === 'gu' ? 'કોઈ મેનેજર ખાતું નથી' : 'No Managers Found'}
+          </h3>
+          <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
+            {language === 'gu'
+              ? 'હાલમાં ફક્ત એડમિન ઍક્સેસ સક્રિય છે. જરૂર પડ્યે નવું મેનેજર એકાઉન્ટ બનાવી શકાય છે.'
+              : 'Currently only Admin access is active. Create a manager account when needed.'}
+          </p>
+          <div className="mt-4">
+            <Button
+              variant="outline"
+              size="sm"
+              icon={<Plus className="w-3.5 h-3.5" />}
+              onClick={() => setIsCreateOpen(true)}
+            >
+              {t('create_manager', 'Create Manager')}
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {managers.map((m) => {
           const isLocked = m.is_locked;
           const isActive = m.is_active;
 
@@ -280,7 +354,11 @@ export const ManagerAccessControl: React.FC = () => {
                 </div>
 
                 <div className="flex flex-col items-end gap-1.5">
-                  {isLocked ? (
+                  {!isActive && m.lock_reason === 'PENDING_APPROVAL' ? (
+                    <Badge variant="warning" dot size="sm">
+                      {t('pending_approval_badge', 'PENDING APPROVAL')}
+                    </Badge>
+                  ) : isLocked ? (
                     <Badge variant="danger" dot size="sm">
                       {t('locked_by_admin', 'LOCKED BY ADMIN')}
                     </Badge>
@@ -331,66 +409,105 @@ export const ManagerAccessControl: React.FC = () => {
 
               {/* Action Buttons */}
               <div className="flex flex-wrap items-center gap-2 pt-1">
-                {isLocked ? (
-                  <Button
-                    variant="primary"
-                    size="sm"
-                    className="bg-emerald-600 hover:bg-emerald-700"
-                    icon={<Unlock className="w-3.5 h-3.5" />}
-                    onClick={() => handleUnlock(m)}
-                  >
-                    {t('unlock_account', 'Unlock Account')}
-                  </Button>
+                {!isActive && m.lock_reason === 'PENDING_APPROVAL' ? (
+                  <>
+                    <Button
+                      variant="primary"
+                      size="sm"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+                      disabled={approvingManagerId === m.id}
+                      isLoading={approvingManagerId === m.id}
+                      onClick={() => handleApproveManager(m)}
+                    >
+                      ✓ {t('approve_manager_btn', 'Approve Manager')}
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      disabled={deletingManagerId === m.id}
+                      isLoading={deletingManagerId === m.id}
+                      onClick={() => handleDeleteManager(m)}
+                    >
+                      ✕ {t('decline_manager_btn', 'Decline')}
+                    </Button>
+                  </>
                 ) : (
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    icon={<Lock className="w-3.5 h-3.5" />}
-                    onClick={() => setSelectedManagerForLock(m)}
-                  >
-                    {t('lock_immediately', 'Lock Immediately')}
-                  </Button>
+                  <>
+                    {isLocked ? (
+                      <Button
+                        variant="primary"
+                        size="sm"
+                        className="bg-emerald-600 hover:bg-emerald-700"
+                        icon={<Unlock className="w-3.5 h-3.5" />}
+                        onClick={() => handleUnlock(m)}
+                      >
+                        {t('unlock_account', 'Unlock Account')}
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        icon={<Lock className="w-3.5 h-3.5" />}
+                        onClick={() => setSelectedManagerForLock(m)}
+                      >
+                        {t('lock_immediately', 'Lock Immediately')}
+                      </Button>
+                    )}
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      icon={<Clock className="w-3.5 h-3.5" />}
+                      onClick={() => {
+                        setEditingTimingManager(m);
+                        setStartTime(m.access_start_time || '09:00');
+                        setEndTime(m.access_end_time || '20:00');
+                      }}
+                    >
+                      {t('edit_hours', 'Edit Hours')}
+                    </Button>
+
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setExtendingManager(m);
+                        setExtendMinutes(60);
+                      }}
+                    >
+                      {t('extend_hours', '+ Extend Hours')}
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={togglingManagerId === m.id}
+                      className={isActive ? 'text-slate-600' : 'text-emerald-700 font-semibold'}
+                      onClick={() => handleToggleActive(m)}
+                    >
+                      <Power className={`w-3.5 h-3.5 mr-1 ${togglingManagerId === m.id ? 'animate-spin' : ''}`} />
+                      {togglingManagerId === m.id ? 'Updating...' : isActive ? t('disable_btn', 'Disable') : t('enable_btn', 'Enable')}
+                    </Button>
+
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-rose-600 hover:bg-rose-50 ml-auto"
+                      disabled={deletingManagerId === m.id}
+                      isLoading={deletingManagerId === m.id}
+                      onClick={() => handleDeleteManager(m)}
+                      title="Remove manager"
+                    >
+                      ✕ {t('decline_manager_btn', 'Decline')}
+                    </Button>
+                  </>
                 )}
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  icon={<Clock className="w-3.5 h-3.5" />}
-                  onClick={() => {
-                    setEditingTimingManager(m);
-                    setStartTime(m.access_start_time || '09:00');
-                    setEndTime(m.access_end_time || '20:00');
-                  }}
-                >
-                  {t('edit_hours', 'Edit Hours')}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => {
-                    setExtendingManager(m);
-                    setExtendMinutes(60);
-                  }}
-                >
-                  {t('extend_hours', '+ Extend Hours')}
-                </Button>
-
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  disabled={togglingManagerId === m.id}
-                  className={isActive ? 'text-slate-600' : 'text-emerald-700 font-semibold'}
-                  onClick={() => handleToggleActive(m)}
-                >
-                  <Power className={`w-3.5 h-3.5 mr-1 ${togglingManagerId === m.id ? 'animate-spin' : ''}`} />
-                  {togglingManagerId === m.id ? 'Updating...' : isActive ? t('disable_btn', 'Disable') : t('enable_btn', 'Enable')}
-                </Button>
               </div>
             </Card>
           );
         })}
       </div>
+      )}
 
       {/* Lock Confirmation Dialog */}
       <ConfirmDialog

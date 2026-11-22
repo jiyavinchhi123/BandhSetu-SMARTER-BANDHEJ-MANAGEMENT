@@ -29,6 +29,20 @@ export interface UserProfile {
   created_at: string;
 }
 
+export interface ProfileUpdatePayload {
+  full_name?: string;
+  phone?: string;
+  email?: string;
+  password?: string;
+  old_password?: string;
+}
+
+export interface ProfileUpdateResponse {
+  user: UserProfile;
+  access_token?: string | null;
+  message: string;
+}
+
 export interface LoginResponse {
   access_token: string;
   token_type: string;
@@ -380,6 +394,21 @@ export class ApiClient {
     return data as UserProfile;
   }
 
+  async updateProfile(payload: ProfileUpdatePayload): Promise<ProfileUpdateResponse> {
+    const response = await fetch(`${this.baseUrl}/auth/me`, {
+      method: 'PUT',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      await this.handleResponseError(response, 'Failed to update credentials');
+    }
+    return await response.json();
+  }
+
   // Admin - Manager Controls
   async listManagers(): Promise<UserProfile[]> {
     const response = await fetch(`${this.baseUrl}/managers/`, {
@@ -452,6 +481,39 @@ export class ApiClient {
       headers: this.getAuthHeaders(),
     });
     if (!response.ok) await this.handleResponseError(response, 'Failed to fetch audit logs');
+    return await response.json();
+  }
+
+  async registerManager(data: {
+    full_name: string;
+    phone: string;
+    email: string;
+    password: string;
+  }): Promise<UserProfile> {
+    const response = await fetch(`${this.baseUrl}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(data),
+    });
+    if (!response.ok) await this.handleResponseError(response, 'Registration failed');
+    return await response.json();
+  }
+
+  async approveManager(managerId: number): Promise<UserProfile> {
+    const response = await fetch(`${this.baseUrl}/managers/${managerId}/approve`, {
+      method: 'POST',
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) await this.handleResponseError(response, 'Failed to approve manager');
+    return await response.json();
+  }
+
+  async deleteManager(managerId: number): Promise<{ message: string }> {
+    const response = await fetch(`${this.baseUrl}/managers/${managerId}`, {
+      method: 'DELETE',
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) await this.handleResponseError(response, 'Failed to delete manager');
     return await response.json();
   }
 

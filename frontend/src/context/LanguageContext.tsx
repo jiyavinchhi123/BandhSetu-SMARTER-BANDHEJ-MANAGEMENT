@@ -16,7 +16,7 @@ export const LanguageProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [language, setLanguageState] = useState<Language>(() => {
     const saved = localStorage.getItem('bandhej_language');
     if (saved === 'gu' || saved === 'en') return saved;
-    return 'en';
+    return 'gu';
   });
 
   const [isLanguageModalOpen, setIsLanguageModalOpen] = useState<boolean>(() => {

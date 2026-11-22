@@ -55,6 +55,7 @@ export const App: React.FC = () => {
               {/* Accessible by Manager & Admin */}
               <Route path="workers" element={<Workers />} />
               <Route path="workers/:id" element={<WorkerProfile />} />
+              <Route path="settings" element={<Settings />} />
 
               {/* Admin Exclusive Routes - Managers cannot access */}
               <Route
@@ -70,14 +71,6 @@ export const App: React.FC = () => {
                 element={
                   <AdminRoute>
                     <Reports />
-                  </AdminRoute>
-                }
-              />
-              <Route
-                path="settings"
-                element={
-                  <AdminRoute>
-                    <Settings />
                   </AdminRoute>
                 }
               />

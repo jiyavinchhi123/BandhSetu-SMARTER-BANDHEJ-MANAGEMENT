@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
+from sqlalchemy import or_
 from app.core.config import settings
 from app.api.v1.api import api_router
 from app.database.session import engine, SessionLocal, Base
@@ -26,15 +27,17 @@ def init_db_and_seed():
     Base.metadata.create_all(bind=engine)
     db = SessionLocal()
     try:
-        # 1. Admin
-        admin = db.query(User).filter(User.role == "admin").first()
-        if not admin:
-            logger.info("Seeding initial Admin / Owner account...")
-            admin = User(
+        # 1. Primary Admin account (+91 9426927175 / admin@123)
+        admin1 = db.query(User).filter(
+            or_(User.phone == "+919426927175", User.email == "admin@bandhej.com")
+        ).first()
+        if not admin1:
+            logger.info("Seeding initial Admin account...")
+            admin1 = User(
                 email="admin@bandhej.com",
-                phone="+919876543210",
-                full_name="Bhavna Mehta (Owner)",
-                hashed_password=hash_password("Admin@123"),
+                phone="+919426927175",
+                full_name="Bhavna Mehta (Admin)",
+                hashed_password=hash_password("admin@123"),
                 role="admin",
                 is_active=True,
                 is_locked=False,
@@ -42,17 +45,55 @@ def init_db_and_seed():
                 access_end_time="23:59",
                 token_version=1
             )
-            db.add(admin)
+            db.add(admin1)
 
-        # 2. Manager
-        manager = db.query(User).filter(User.role == "manager").first()
+        # 2. Additional Admin account: Hetal Vinchhi (+91 9537335737 / admin@123)
+        admin2 = db.query(User).filter(
+            or_(User.phone == "+919537335737", User.email == "hetal@bandhej.com")
+        ).first()
+        if not admin2:
+            logger.info("Seeding Admin account for Hetal Vinchhi...")
+            admin2 = User(
+                email="hetal@bandhej.com",
+                phone="+919537335737",
+                full_name="Hetal Vinchhi",
+                hashed_password=hash_password("admin@123"),
+                role="admin",
+                is_active=True,
+                is_locked=False,
+                access_start_time="00:00",
+                access_end_time="23:59",
+                token_version=1
+            )
+            db.add(admin2)
+        else:
+            admin2.role = "admin"
+            admin2.full_name = "Hetal Vinchhi"
+            admin2.phone = "+919537335737"
+            admin2.hashed_password = hash_password("admin@123")
+            admin2.is_active = True
+            admin2.is_locked = False
+
+        # 3. Clean up sample manager Rajesh Patel if present
+        legacy_mgr = db.query(User).filter(User.email == "manager@bandhej.com").first()
+        if legacy_mgr:
+            db.delete(legacy_mgr)
+
+        # 4. Registered Manager account: Jiya Vinchhi (jiya.vinchhi2412@gmail.com / +919426927907)
+        manager = db.query(User).filter(
+            or_(
+                User.email == "jiya.vinchhi2412@gmail.com",
+                User.phone == "+919426927907",
+                User.full_name == "Jiya Vinchhi"
+            )
+        ).first()
         if not manager:
-            logger.info("Seeding initial Manager account...")
+            logger.info("Restoring registered Manager account for Jiya Vinchhi...")
             manager = User(
-                email="manager@bandhej.com",
-                phone="+919876543211",
-                full_name="Rajesh Patel (Manager)",
-                hashed_password=hash_password("Manager@123"),
+                email="jiya.vinchhi2412@gmail.com",
+                phone="+919426927907",
+                full_name="Jiya Vinchhi",
+                hashed_password=hash_password("admin@123"),
                 role="manager",
                 is_active=True,
                 is_locked=False,
@@ -61,6 +102,14 @@ def init_db_and_seed():
                 token_version=1
             )
             db.add(manager)
+        else:
+            manager.role = "manager"
+            manager.full_name = "Jiya Vinchhi"
+            manager.email = "jiya.vinchhi2412@gmail.com"
+            manager.phone = "+919426927907"
+            manager.is_active = True
+            manager.is_locked = False
+            manager.lock_reason = None
 
         db.commit()
     except Exception as e:

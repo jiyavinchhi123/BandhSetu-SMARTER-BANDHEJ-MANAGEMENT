@@ -46,7 +46,10 @@ export const Sidebar: React.FC<SidebarProps> = ({ className = '' }) => {
   const visibleNavItems: NavItem[] =
     role === 'admin'
       ? [...baseNavItems, ...adminNavItems]
-      : [{ name: t('artisan_workers', 'Artisan Workers'), path: '/workers', icon: Users }];
+      : [
+          { name: t('artisan_workers', 'Artisan Workers'), path: '/workers', icon: Users },
+          { name: t('settings', 'Settings'), path: '/settings', icon: Settings },
+        ];
 
   return (
     <aside
