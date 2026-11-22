@@ -4,6 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import desc, and_
 from fastapi import HTTPException, status
 
+from app.database.session import atomic_transaction
 from app.models.worker import Worker
 from app.models.payment_record import PaymentRecord
 from app.models.money_transaction import MoneyTransaction
@@ -100,61 +101,65 @@ class PaymentService:
         pay_dt = data.payment_date or date.today()
         ref = data.reference_no.strip() if data.reference_no else None
 
-        # 1. Create PaymentRecord
-        payment = PaymentRecord(
-            worker_id=worker.id,
-            payment_type="Advance Given",
-            amount=data.amount,
-            payment_mode=data.payment_mode,
-            reference_no=ref,
-            disbursed_by_name=user_name,
-            payment_date=pay_dt,
-            notes=data.remarks,
-        )
-        db.add(payment)
-        db.flush()
+        try:
+            with atomic_transaction(db):
+                # 1. Create PaymentRecord
+                payment = PaymentRecord(
+                    worker_id=worker.id,
+                    payment_type="Advance Given",
+                    amount=data.amount,
+                    payment_mode=data.payment_mode,
+                    reference_no=ref,
+                    disbursed_by_name=user_name,
+                    payment_date=pay_dt,
+                    notes=data.remarks,
+                )
+                db.add(payment)
+                db.flush()
 
-        # 2. Update Worker Payable Balance (Advance reduces balance)
-        worker.payable_balance = round(float(worker.payable_balance) - data.amount, 2)
+                # 2. Update Worker Payable Balance (Advance reduces balance)
+                worker.payable_balance = round(float(worker.payable_balance) - data.amount, 2)
 
-        # 3. Create MoneyTransaction (DEBIT: Worker takes cash/money)
-        txn_code = PaymentService.generate_money_txn_code(db)
-        desc_text = f"Advance Taken via {data.payment_mode}"
-        if ref:
-            desc_text += f" (Ref: {ref})"
+                # 3. Create MoneyTransaction (DEBIT: Worker takes cash/money)
+                txn_code = PaymentService.generate_money_txn_code(db)
+                desc_text = f"Advance Taken via {data.payment_mode}"
+                if ref:
+                    desc_text += f" (Ref: {ref})"
 
-        money_txn = MoneyTransaction(
-            transaction_code=txn_code,
-            worker_id=worker.id,
-            payment_record_id=payment.id,
-            transaction_date=pay_dt,
-            transaction_type="ADVANCE_GIVEN",
-            description=desc_text,
-            credit_amount=0.00,
-            debit_amount=data.amount,
-            running_balance=worker.payable_balance,
-            payment_mode=data.payment_mode,
-            reference_no=ref,
-            recorded_by_id=user_id,
-            recorded_by_name=user_name,
-            remarks=data.remarks,
-        )
-        db.add(money_txn)
+                money_txn = MoneyTransaction(
+                    transaction_code=txn_code,
+                    worker_id=worker.id,
+                    payment_record_id=payment.id,
+                    transaction_date=pay_dt,
+                    transaction_type="ADVANCE_GIVEN",
+                    description=desc_text,
+                    credit_amount=0.00,
+                    debit_amount=data.amount,
+                    running_balance=worker.payable_balance,
+                    payment_mode=data.payment_mode,
+                    reference_no=ref,
+                    recorded_by_id=user_id,
+                    recorded_by_name=user_name,
+                    remarks=data.remarks,
+                )
+                db.add(money_txn)
 
-        # 4. Audit Log
-        audit = AuditLog(
-            user_id=user_id,
-            user_email=user_name,
-            action="ADVANCE_GIVEN_RECORDED",
-            ip_address="127.0.0.1",
-            details=f"Recorded advance of ₹{data.amount:.2f} via {data.payment_mode} to {worker.full_name} ({worker.serial_number}). New balance: ₹{worker.payable_balance:.2f}",
-            timestamp_ist=format_ist_datetime(),
-        )
-        db.add(audit)
+                # 4. Audit Log
+                audit = AuditLog(
+                    user_id=user_id,
+                    user_email=user_name,
+                    action="ADVANCE_GIVEN_RECORDED",
+                    ip_address="127.0.0.1",
+                    details=f"Recorded advance of ₹{data.amount:.2f} via {data.payment_mode} to {worker.full_name} ({worker.serial_number}). New balance: ₹{worker.payable_balance:.2f}",
+                    timestamp_ist=format_ist_datetime(),
+                )
+                db.add(audit)
 
-        db.commit()
-        db.refresh(money_txn)
-        return money_txn
+            db.refresh(money_txn)
+            return money_txn
+        except Exception as e:
+            logger.error(f"Error in atomic record_advance: {e}")
+            raise
 
     @staticmethod
     def record_payout(
@@ -190,63 +195,67 @@ class PaymentService:
         pay_dt = data.payment_date or date.today()
         ref = data.reference_no.strip() if data.reference_no else None
 
-        # 1. Create PaymentRecord
-        payment = PaymentRecord(
-            worker_id=worker.id,
-            payment_type="Wage Payout",
-            amount=payout_amount,
-            payment_mode=data.payment_mode,
-            reference_no=ref,
-            disbursed_by_name=user_name,
-            payment_date=pay_dt,
-            notes=data.remarks,
-        )
-        db.add(payment)
-        db.flush()
+        try:
+            with atomic_transaction(db):
+                # 1. Create PaymentRecord
+                payment = PaymentRecord(
+                    worker_id=worker.id,
+                    payment_type="Wage Payout",
+                    amount=payout_amount,
+                    payment_mode=data.payment_mode,
+                    reference_no=ref,
+                    disbursed_by_name=user_name,
+                    payment_date=pay_dt,
+                    notes=data.remarks,
+                )
+                db.add(payment)
+                db.flush()
 
-        # 2. Update Worker Payable Balance
-        worker.payable_balance = round(float(worker.payable_balance) - payout_amount, 2)
+                # 2. Update Worker Payable Balance
+                worker.payable_balance = round(float(worker.payable_balance) - payout_amount, 2)
 
-        # 3. Create MoneyTransaction (DEBIT: Money paid to worker)
-        txn_code = PaymentService.generate_money_txn_code(db)
-        desc_text = f"Wage Payout via {data.payment_mode}"
-        if data.is_full_settlement:
-            desc_text += " (Full Settlement)"
-        if ref:
-            desc_text += f" (Ref: {ref})"
+                # 3. Create MoneyTransaction (DEBIT: Money paid to worker)
+                txn_code = PaymentService.generate_money_txn_code(db)
+                desc_text = f"Wage Payout via {data.payment_mode}"
+                if data.is_full_settlement:
+                    desc_text += " (Full Settlement)"
+                if ref:
+                    desc_text += f" (Ref: {ref})"
 
-        money_txn = MoneyTransaction(
-            transaction_code=txn_code,
-            worker_id=worker.id,
-            payment_record_id=payment.id,
-            transaction_date=pay_dt,
-            transaction_type="WAGE_PAYOUT",
-            description=desc_text,
-            credit_amount=0.00,
-            debit_amount=payout_amount,
-            running_balance=worker.payable_balance,
-            payment_mode=data.payment_mode,
-            reference_no=ref,
-            recorded_by_id=user_id,
-            recorded_by_name=user_name,
-            remarks=data.remarks,
-        )
-        db.add(money_txn)
+                money_txn = MoneyTransaction(
+                    transaction_code=txn_code,
+                    worker_id=worker.id,
+                    payment_record_id=payment.id,
+                    transaction_date=pay_dt,
+                    transaction_type="WAGE_PAYOUT",
+                    description=desc_text,
+                    credit_amount=0.00,
+                    debit_amount=payout_amount,
+                    running_balance=worker.payable_balance,
+                    payment_mode=data.payment_mode,
+                    reference_no=ref,
+                    recorded_by_id=user_id,
+                    recorded_by_name=user_name,
+                    remarks=data.remarks,
+                )
+                db.add(money_txn)
 
-        # 4. Audit Log
-        audit = AuditLog(
-            user_id=user_id,
-            user_email=user_name,
-            action="WAGE_PAYOUT_RECORDED",
-            ip_address="127.0.0.1",
-            details=f"Disbursed wage payout of ₹{payout_amount:.2f} via {data.payment_mode} to {worker.full_name} ({worker.serial_number}). New balance: ₹{worker.payable_balance:.2f}",
-            timestamp_ist=format_ist_datetime(),
-        )
-        db.add(audit)
+                # 4. Audit Log
+                audit = AuditLog(
+                    user_id=user_id,
+                    user_email=user_name,
+                    action="WAGE_PAYOUT_RECORDED",
+                    ip_address="127.0.0.1",
+                    details=f"Disbursed wage payout of ₹{payout_amount:.2f} via {data.payment_mode} to {worker.full_name} ({worker.serial_number}). New balance: ₹{worker.payable_balance:.2f}",
+                    timestamp_ist=format_ist_datetime(),
+                )
+                db.add(audit)
 
-        db.commit()
-        db.refresh(money_txn)
-        return money_txn
+            db.refresh(money_txn)
+            return money_txn
+        except Exception as e:
+            logger.error(f"Error in atomic record_payout: {e}")
+            raise
 
     @staticmethod
     def get_money_ledger_summary(
@@ -340,62 +349,66 @@ class PaymentService:
         if not worker:
             raise HTTPException(status_code=404, detail="Worker associated with transaction not found.")
 
-        # Mark original as reversed
-        txn.is_reversed = True
-        txn.reversal_reason = req.reason
-        reversal_code = PaymentService.generate_money_txn_code(db)
-        txn.reversal_ref_code = reversal_code
+        try:
+            with atomic_transaction(db):
+                # Mark original as reversed
+                txn.is_reversed = True
+                txn.reversal_reason = req.reason
+                reversal_code = PaymentService.generate_money_txn_code(db)
+                txn.reversal_ref_code = reversal_code
 
-        # If reversing a DEBIT (Payout or Advance):
-        # Money was deducted from worker; reversal restores her payable balance!
-        if txn.debit_amount > 0:
-            worker.payable_balance = round(float(worker.payable_balance) + float(txn.debit_amount), 2)
-            comp_txn = MoneyTransaction(
-                transaction_code=reversal_code,
-                worker_id=worker.id,
-                transaction_date=date.today(),
-                transaction_type="CORRECTION_REVERSAL",
-                description=f"[REVERSAL] Restored {txn.description}: {req.reason}",
-                credit_amount=float(txn.debit_amount),
-                debit_amount=0.00,
-                running_balance=worker.payable_balance,
-                payment_mode=txn.payment_mode,
-                recorded_by_id=user_id,
-                recorded_by_name=user_name,
-                remarks=f"Reversal of {txn.transaction_code}: {req.reason}",
-            )
-            db.add(comp_txn)
+                # If reversing a DEBIT (Payout or Advance):
+                # Money was deducted from worker; reversal restores her payable balance!
+                if txn.debit_amount > 0:
+                    worker.payable_balance = round(float(worker.payable_balance) + float(txn.debit_amount), 2)
+                    comp_txn = MoneyTransaction(
+                        transaction_code=reversal_code,
+                        worker_id=worker.id,
+                        transaction_date=date.today(),
+                        transaction_type="CORRECTION_REVERSAL",
+                        description=f"[REVERSAL] Restored {txn.description}: {req.reason}",
+                        credit_amount=float(txn.debit_amount),
+                        debit_amount=0.00,
+                        running_balance=worker.payable_balance,
+                        payment_mode=txn.payment_mode,
+                        recorded_by_id=user_id,
+                        recorded_by_name=user_name,
+                        remarks=f"Reversal of {txn.transaction_code}: {req.reason}",
+                    )
+                    db.add(comp_txn)
 
-        # If reversing a CREDIT (Work Earning):
-        # Work earning was credited; reversal removes it from payable balance and total earned
-        elif txn.credit_amount > 0:
-            worker.payable_balance = round(float(worker.payable_balance) - float(txn.credit_amount), 2)
-            worker.total_earned = max(0.0, round(float(worker.total_earned) - float(txn.credit_amount), 2))
-            comp_txn = MoneyTransaction(
-                transaction_code=reversal_code,
-                worker_id=worker.id,
-                transaction_date=date.today(),
-                transaction_type="CORRECTION_REVERSAL",
-                description=f"[REVERSAL] Deducted {txn.description}: {req.reason}",
-                credit_amount=0.00,
-                debit_amount=float(txn.credit_amount),
-                running_balance=worker.payable_balance,
-                recorded_by_id=user_id,
-                recorded_by_name=user_name,
-                remarks=f"Reversal of {txn.transaction_code}: {req.reason}",
-            )
-            db.add(comp_txn)
+                # If reversing a CREDIT (Work Earning):
+                # Work earning was credited; reversal removes it from payable balance and total earned
+                elif txn.credit_amount > 0:
+                    worker.payable_balance = round(float(worker.payable_balance) - float(txn.credit_amount), 2)
+                    worker.total_earned = max(0.0, round(float(worker.total_earned) - float(txn.credit_amount), 2))
+                    comp_txn = MoneyTransaction(
+                        transaction_code=reversal_code,
+                        worker_id=worker.id,
+                        transaction_date=date.today(),
+                        transaction_type="CORRECTION_REVERSAL",
+                        description=f"[REVERSAL] Deducted {txn.description}: {req.reason}",
+                        credit_amount=0.00,
+                        debit_amount=float(txn.credit_amount),
+                        running_balance=worker.payable_balance,
+                        recorded_by_id=user_id,
+                        recorded_by_name=user_name,
+                        remarks=f"Reversal of {txn.transaction_code}: {req.reason}",
+                    )
+                    db.add(comp_txn)
 
-        audit = AuditLog(
-            user_id=user_id,
-            user_email=user_name,
-            action="FINANCIAL_TRANSACTION_REVERSED",
-            ip_address="127.0.0.1",
-            details=f"Reversed transaction {txn.transaction_code} for worker {worker.full_name}. Reason: {req.reason}",
-            timestamp_ist=format_ist_datetime(),
-        )
-        db.add(audit)
+                audit = AuditLog(
+                    user_id=user_id,
+                    user_email=user_name,
+                    action="FINANCIAL_TRANSACTION_REVERSED",
+                    ip_address="127.0.0.1",
+                    details=f"Reversed transaction {txn.transaction_code} for worker {worker.full_name}. Reason: {req.reason}",
+                    timestamp_ist=format_ist_datetime(),
+                )
+                db.add(audit)
 
-        db.commit()
-        db.refresh(txn)
-        return txn
+            db.refresh(txn)
+            return txn
+        except Exception as e:
+            logger.error(f"Error in atomic reverse_transaction: {e}")
+            raise

@@ -119,6 +119,10 @@ def init_db_and_seed():
         db.close()
 
 
+from app.database.indexes import ensure_database_indexes
+from app.services.backup_scheduler import start_backup_scheduler, stop_backup_scheduler
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("==================================================")
@@ -126,10 +130,26 @@ async def lifespan(app: FastAPI):
     logger.info(f"Environment: {settings.ENVIRONMENT}")
     logger.info("Initializing database tables and seed records...")
     init_db_and_seed()
+    
+    # 1. Apply high-performance composite indexes
+    try:
+        applied_indexes = ensure_database_indexes(engine)
+        logger.info(f"Verified {applied_indexes} performance database indexes.")
+    except Exception as ie:
+        logger.warning(f"Index initialization notice: {ie}")
+
+    # 2. Launch automated encrypted backup scheduler
+    try:
+        start_backup_scheduler()
+        logger.info("Automated daily encrypted backup scheduler active.")
+    except Exception as be:
+        logger.warning(f"Backup scheduler notice: {be}")
+
     logger.info("Database initialized successfully.")
     logger.info(f"Docs: /docs | Health: {settings.API_V1_STR}/health")
     logger.info("==================================================")
     yield
+    stop_backup_scheduler()
 
 
 app = FastAPI(

@@ -13,6 +13,7 @@ from app.models.money_transaction import MoneyTransaction
 from app.models.material_ledger import MaterialLedgerEntry
 from app.models.audit_log import AuditLog
 from app.utils.formatters import format_ist_datetime
+from app.database.session import atomic_transaction
 from app.schemas.distribution import (
     WorkDistributionCreate,
     WorkDistributionResponse,
@@ -93,86 +94,90 @@ class DistributionService:
         issue_dt = data.issue_date or date.today()
         due_dt = data.due_date or (issue_dt + timedelta(days=14))
 
-        # 1. Create Work Distribution record
-        distribution = WorkDistribution(
-            batch_code=batch_code,
-            worker_id=worker.id,
-            item_id=item.id,
-            item_name_snapshot=item.item_name,
-            item_code_snapshot=item.item_code,
-            rate_per_piece=snapshot_rate,  # Permanent Snapshot Rate
-            knot_style=data.knot_style or "Standard",
-            quantity_issued=data.quantity_issued,
-            quantity_returned=0,
-            quantity_rejected=0,
-            quantity_pending=data.quantity_issued,
-            total_gross_wage=gross_wage,
-            deductions=data.deductions or 0.0,
-            bonus=data.bonus or 0.0,
-            net_payable=net_wage,
-            issue_date=issue_dt,
-            due_date=due_dt,
-            status="Issued",
-            remarks=data.remarks,
-        )
-        db.add(distribution)
-        db.flush()  # assign distribution.id
+        try:
+            with atomic_transaction(db):
+                # 1. Create Work Distribution record
+                distribution = WorkDistribution(
+                    batch_code=batch_code,
+                    worker_id=worker.id,
+                    item_id=item.id,
+                    item_name_snapshot=item.item_name,
+                    item_code_snapshot=item.item_code,
+                    rate_per_piece=snapshot_rate,  # Permanent Snapshot Rate
+                    knot_style=data.knot_style or "Standard",
+                    quantity_issued=data.quantity_issued,
+                    quantity_returned=0,
+                    quantity_rejected=0,
+                    quantity_pending=data.quantity_issued,
+                    total_gross_wage=gross_wage,
+                    deductions=data.deductions or 0.0,
+                    bonus=data.bonus or 0.0,
+                    net_payable=net_wage,
+                    issue_date=issue_dt,
+                    due_date=due_dt,
+                    status="Issued",
+                    remarks=data.remarks,
+                )
+                db.add(distribution)
+                db.flush()  # assign distribution.id
 
-        # 2. Worker Account Perspective: DEBIT entry (Material Given to Worker = Debit quantity)
-        new_running_balance = int(worker.pending_pieces) + data.quantity_issued
-        mtxn_code = DistributionService.generate_material_txn_code(db)
-        mat_txn = MaterialTransaction(
-            transaction_code=mtxn_code,
-            worker_id=worker.id,
-            distribution_id=distribution.id,
-            item_id=item.id,
-            item_name=item.item_name,
-            item_code=item.item_code,
-            transaction_date=issue_dt,
-            transaction_type="DEBIT_GIVEN",
-            debit_qty=data.quantity_issued,
-            credit_qty=0,
-            rejected_qty=0,
-            rate_per_piece=snapshot_rate,
-            total_value=gross_wage,
-            running_balance=new_running_balance,
-            recorded_by_id=user_id,
-            recorded_by_name=user_name,
-            remarks=data.remarks or f"Material Given: {data.quantity_issued} pcs of {item.item_name}",
-        )
-        db.add(mat_txn)
+                # 2. Worker Account Perspective: DEBIT entry (Material Given to Worker = Debit quantity)
+                new_running_balance = int(worker.pending_pieces) + data.quantity_issued
+                mtxn_code = DistributionService.generate_material_txn_code(db)
+                mat_txn = MaterialTransaction(
+                    transaction_code=mtxn_code,
+                    worker_id=worker.id,
+                    distribution_id=distribution.id,
+                    item_id=item.id,
+                    item_name=item.item_name,
+                    item_code=item.item_code,
+                    transaction_date=issue_dt,
+                    transaction_type="DEBIT_GIVEN",
+                    debit_qty=data.quantity_issued,
+                    credit_qty=0,
+                    rejected_qty=0,
+                    rate_per_piece=snapshot_rate,
+                    total_value=gross_wage,
+                    running_balance=new_running_balance,
+                    recorded_by_id=user_id,
+                    recorded_by_name=user_name,
+                    remarks=data.remarks or f"Material Given: {data.quantity_issued} pcs of {item.item_name}",
+                )
+                db.add(mat_txn)
 
-        # 3. Backward-compatible raw fabric ledger entry
-        mat_entry = MaterialLedgerEntry(
-            worker_id=worker.id,
-            lot_number=batch_code,
-            material_type=f"{item.item_name} (Pieces)",
-            issued_qty=float(data.quantity_issued),
-            returned_qty=0.0,
-            unit="pieces",
-            issue_date=issue_dt,
-            status="With Worker",
-            notes=f"Consignment {batch_code} ({data.knot_style or 'Standard'})",
-        )
-        db.add(mat_entry)
+                # 3. Backward-compatible raw fabric ledger entry
+                mat_entry = MaterialLedgerEntry(
+                    worker_id=worker.id,
+                    lot_number=batch_code,
+                    material_type=f"{item.item_name} (Pieces)",
+                    issued_qty=float(data.quantity_issued),
+                    returned_qty=0.0,
+                    unit="pieces",
+                    issue_date=issue_dt,
+                    status="With Worker",
+                    notes=f"Consignment {batch_code} ({data.knot_style or 'Standard'})",
+                )
+                db.add(mat_entry)
 
-        # 4. Update Worker live counters
-        worker.pending_pieces = new_running_balance
+                # 4. Update Worker live counters
+                worker.pending_pieces = new_running_balance
 
-        # 5. Audit Log
-        audit = AuditLog(
-            user_id=user_id,
-            user_email=user_name,
-            action="WORK_DISTRIBUTION_GIVEN",
-            ip_address="127.0.0.1",
-            details=f"Issued {data.quantity_issued} pcs of {item.item_name} to {worker.full_name} ({worker.serial_number}) at ₹{snapshot_rate:.2f}/pc. Batch: {batch_code}",
-            timestamp_ist=format_ist_datetime(),
-        )
-        db.add(audit)
+                # 5. Audit Log
+                audit = AuditLog(
+                    user_id=user_id,
+                    user_email=user_name,
+                    action="WORK_DISTRIBUTION_GIVEN",
+                    ip_address="127.0.0.1",
+                    details=f"Issued {data.quantity_issued} pcs of {item.item_name} to {worker.full_name} ({worker.serial_number}) at ₹{snapshot_rate:.2f}/pc. Batch: {batch_code}",
+                    timestamp_ist=format_ist_datetime(),
+                )
+                db.add(audit)
 
-        db.commit()
-        db.refresh(distribution)
-        return distribution
+            db.refresh(distribution)
+            return distribution
+        except Exception as e:
+            logger.error(f"Error executing atomic give_work: {e}")
+            raise
 
     @staticmethod
     def receive_work(
@@ -224,105 +229,109 @@ class DistributionService:
         return_code = DistributionService.generate_return_code(db)
         ret_date = data.return_date or date.today()
 
-        # 1. Create WorkReturn record
-        work_return = WorkReturn(
-            return_code=return_code,
-            distribution_id=distribution.id,
-            worker_id=worker.id,
-            item_id=distribution.item_id,
-            item_name_snapshot=distribution.item_name_snapshot,
-            rate_per_piece_snapshot=rate_snapshot,
-            quantity_returned=qty_accepted,
-            quantity_rejected=qty_rejected,
-            rejection_reason=data.rejection_reason if qty_rejected > 0 else None,
-            rejection_remarks=data.rejection_remarks if qty_rejected > 0 else None,
-            completed_work_value=earned_wage,
-            return_date=ret_date,
-            recorded_by_id=user_id,
-            recorded_by_name=user_name,
-            remarks=data.remarks,
-        )
-        db.add(work_return)
-        db.flush()
+        try:
+            with atomic_transaction(db):
+                # 1. Create WorkReturn record
+                work_return = WorkReturn(
+                    return_code=return_code,
+                    distribution_id=distribution.id,
+                    worker_id=worker.id,
+                    item_id=distribution.item_id,
+                    item_name_snapshot=distribution.item_name_snapshot,
+                    rate_per_piece_snapshot=rate_snapshot,
+                    quantity_returned=qty_accepted,
+                    quantity_rejected=qty_rejected,
+                    rejection_reason=data.rejection_reason if qty_rejected > 0 else None,
+                    rejection_remarks=data.rejection_remarks if qty_rejected > 0 else None,
+                    completed_work_value=earned_wage,
+                    return_date=ret_date,
+                    recorded_by_id=user_id,
+                    recorded_by_name=user_name,
+                    remarks=data.remarks,
+                )
+                db.add(work_return)
+                db.flush()
 
-        # 2. Update WorkDistribution pending & returned quantities
-        distribution.quantity_returned += qty_accepted
-        distribution.quantity_rejected += qty_rejected
-        distribution.quantity_pending = (
-            distribution.quantity_issued
-            - distribution.quantity_returned
-            - distribution.quantity_rejected
-        )
-        if distribution.quantity_pending == 0:
-            distribution.status = "Completed"
-        else:
-            distribution.status = "Partially Returned"
-        distribution.return_date = ret_date
+                # 2. Update WorkDistribution pending & returned quantities
+                distribution.quantity_returned += qty_accepted
+                distribution.quantity_rejected += qty_rejected
+                distribution.quantity_pending = (
+                    distribution.quantity_issued
+                    - distribution.quantity_returned
+                    - distribution.quantity_rejected
+                )
+                if distribution.quantity_pending == 0:
+                    distribution.status = "Completed"
+                else:
+                    distribution.status = "Partially Returned"
+                distribution.return_date = ret_date
 
-        # 3. Update Worker counters
-        worker.pending_pieces = max(0, int(worker.pending_pieces) - total_returning)
-        worker.payable_balance = float(worker.payable_balance) + earned_wage
-        worker.total_earned = float(worker.total_earned) + earned_wage
+                # 3. Update Worker counters
+                worker.pending_pieces = max(0, int(worker.pending_pieces) - total_returning)
+                worker.payable_balance = float(worker.payable_balance) + earned_wage
+                worker.total_earned = float(worker.total_earned) + earned_wage
 
-        # 4. Worker Account Perspective: CREDIT entry (Material Received from Worker = Credit quantity)
-        mtxn_code = DistributionService.generate_material_txn_code(db)
-        txn_type = "CREDIT_RECEIVED" if qty_accepted > 0 else "REJECTED_RETURNED"
-        mat_txn = MaterialTransaction(
-            transaction_code=mtxn_code,
-            worker_id=worker.id,
-            distribution_id=distribution.id,
-            return_id=work_return.id,
-            item_id=distribution.item_id,
-            item_name=distribution.item_name_snapshot,
-            item_code=distribution.item_code_snapshot,
-            transaction_date=ret_date,
-            transaction_type=txn_type,
-            debit_qty=0,
-            credit_qty=qty_accepted,
-            rejected_qty=qty_rejected,
-            rate_per_piece=rate_snapshot,
-            total_value=earned_wage,
-            running_balance=worker.pending_pieces,
-            recorded_by_id=user_id,
-            recorded_by_name=user_name,
-            remarks=data.remarks or f"Work Return: {qty_accepted} accepted, {qty_rejected} rejected (Batch {distribution.batch_code})",
-        )
-        db.add(mat_txn)
+                # 4. Worker Account Perspective: CREDIT entry (Material Received from Worker = Credit quantity)
+                mtxn_code = DistributionService.generate_material_txn_code(db)
+                txn_type = "CREDIT_RECEIVED" if qty_accepted > 0 else "REJECTED_RETURNED"
+                mat_txn = MaterialTransaction(
+                    transaction_code=mtxn_code,
+                    worker_id=worker.id,
+                    distribution_id=distribution.id,
+                    return_id=work_return.id,
+                    item_id=distribution.item_id,
+                    item_name=distribution.item_name_snapshot,
+                    item_code=distribution.item_code_snapshot,
+                    transaction_date=ret_date,
+                    transaction_type=txn_type,
+                    debit_qty=0,
+                    credit_qty=qty_accepted,
+                    rejected_qty=qty_rejected,
+                    rate_per_piece=rate_snapshot,
+                    total_value=earned_wage,
+                    running_balance=worker.pending_pieces,
+                    recorded_by_id=user_id,
+                    recorded_by_name=user_name,
+                    remarks=data.remarks or f"Work Return: {qty_accepted} accepted, {qty_rejected} rejected (Batch {distribution.batch_code})",
+                )
+                db.add(mat_txn)
 
-        # 5. Worker-Account Perspective: CREDIT entry in Money Ledger (Work Earned = Credit wage)
-        if earned_wage > 0:
-            fin_code = f"FIN-{ret_date.strftime('%Y%m%d')}-{db.query(MoneyTransaction).count() + 1:04d}"
-            money_txn = MoneyTransaction(
-                transaction_code=fin_code,
-                worker_id=worker.id,
-                distribution_id=distribution.id,
-                return_id=work_return.id,
-                transaction_date=ret_date,
-                transaction_type="WORK_EARNING",
-                description=f"Work Earned: {qty_accepted} pcs of {distribution.item_name_snapshot} ({distribution.batch_code})",
-                credit_amount=earned_wage,
-                debit_amount=0.00,
-                running_balance=worker.payable_balance,
-                recorded_by_id=user_id,
-                recorded_by_name=user_name,
-                remarks=data.remarks or f"Accepted {qty_accepted} pcs at snapshot ₹{rate_snapshot:.2f}/pc",
-            )
-            db.add(money_txn)
+                # 5. Worker-Account Perspective: CREDIT entry in Money Ledger (Work Earned = Credit wage)
+                if earned_wage > 0:
+                    fin_code = f"FIN-{ret_date.strftime('%Y%m%d')}-{db.query(MoneyTransaction).count() + 1:04d}"
+                    money_txn = MoneyTransaction(
+                        transaction_code=fin_code,
+                        worker_id=worker.id,
+                        distribution_id=distribution.id,
+                        return_id=work_return.id,
+                        transaction_date=ret_date,
+                        transaction_type="WORK_EARNING",
+                        description=f"Work Earned: {qty_accepted} pcs of {distribution.item_name_snapshot} ({distribution.batch_code})",
+                        credit_amount=earned_wage,
+                        debit_amount=0.00,
+                        running_balance=worker.payable_balance,
+                        recorded_by_id=user_id,
+                        recorded_by_name=user_name,
+                        remarks=data.remarks or f"Accepted {qty_accepted} pcs at snapshot ₹{rate_snapshot:.2f}/pc",
+                    )
+                    db.add(money_txn)
 
-        # 6. Audit Log
-        audit = AuditLog(
-            user_id=user_id,
-            user_email=user_name,
-            action="WORK_RETURN_RECORDED",
-            ip_address="127.0.0.1",
-            details=f"Recorded return for {worker.full_name}: {qty_accepted} accepted (₹{earned_wage:.2f}), {qty_rejected} rejected. Remaining pending: {distribution.quantity_pending}",
-            timestamp_ist=format_ist_datetime(),
-        )
-        db.add(audit)
+                # 6. Audit Log
+                audit = AuditLog(
+                    user_id=user_id,
+                    user_email=user_name,
+                    action="WORK_RETURN_RECORDED",
+                    ip_address="127.0.0.1",
+                    details=f"Recorded return for {worker.full_name}: {qty_accepted} accepted (₹{earned_wage:.2f}), {qty_rejected} rejected. Remaining pending: {distribution.quantity_pending}",
+                    timestamp_ist=format_ist_datetime(),
+                )
+                db.add(audit)
 
-        db.commit()
-        db.refresh(work_return)
-        return work_return
+            db.refresh(work_return)
+            return work_return
+        except Exception as e:
+            logger.error(f"Error executing atomic receive_work: {e}")
+            raise
 
     @staticmethod
     def get_material_ledger_summary(
@@ -488,77 +497,81 @@ class DistributionService:
         if not worker:
             raise HTTPException(status_code=404, detail="Worker not found.")
 
-        # Mark original transaction as reversed
-        txn.is_reversed = True
-        txn.reversal_reason = req.reason
+        try:
+            with atomic_transaction(db):
+                # Mark original transaction as reversed
+                txn.is_reversed = True
+                txn.reversal_reason = req.reason
 
-        reversal_code = DistributionService.generate_material_txn_code(db)
-        txn.reversal_ref_code = reversal_code
+                reversal_code = DistributionService.generate_material_txn_code(db)
+                txn.reversal_ref_code = reversal_code
 
-        # If we are reversing a DEBIT_GIVEN:
-        # Worker was given material that is now being cancelled -> reduce worker pending pieces
-        if txn.debit_qty > 0:
-            worker.pending_pieces = max(0, worker.pending_pieces - txn.debit_qty)
-            comp_txn = MaterialTransaction(
-                transaction_code=reversal_code,
-                worker_id=worker.id,
-                distribution_id=txn.distribution_id,
-                item_id=txn.item_id,
-                item_name=f"[REVERSAL] {txn.item_name}",
-                item_code=txn.item_code,
-                transaction_date=date.today(),
-                transaction_type="LEDGER_CORRECTION",
-                debit_qty=0,
-                credit_qty=0,
-                rejected_qty=0,
-                rate_per_piece=txn.rate_per_piece,
-                total_value=0.0,
-                running_balance=worker.pending_pieces,
-                recorded_by_id=user_id,
-                recorded_by_name=user_name,
-                remarks=f"Reversal of {txn.transaction_code}: {req.reason}",
-            )
-            db.add(comp_txn)
+                # If we are reversing a DEBIT_GIVEN:
+                # Worker was given material that is now being cancelled -> reduce worker pending pieces
+                if txn.debit_qty > 0:
+                    worker.pending_pieces = max(0, worker.pending_pieces - txn.debit_qty)
+                    comp_txn = MaterialTransaction(
+                        transaction_code=reversal_code,
+                        worker_id=worker.id,
+                        distribution_id=txn.distribution_id,
+                        item_id=txn.item_id,
+                        item_name=f"[REVERSAL] {txn.item_name}",
+                        item_code=txn.item_code,
+                        transaction_date=date.today(),
+                        transaction_type="LEDGER_CORRECTION",
+                        debit_qty=0,
+                        credit_qty=0,
+                        rejected_qty=0,
+                        rate_per_piece=txn.rate_per_piece,
+                        total_value=0.0,
+                        running_balance=worker.pending_pieces,
+                        recorded_by_id=user_id,
+                        recorded_by_name=user_name,
+                        remarks=f"Reversal of {txn.transaction_code}: {req.reason}",
+                    )
+                    db.add(comp_txn)
 
-        # If we are reversing a CREDIT_RECEIVED (Return):
-        # Return is cancelled -> restore pending pieces to worker, deduct erroneously added wage
-        elif txn.credit_qty > 0 or txn.rejected_qty > 0:
-            total_pieces = txn.credit_qty + txn.rejected_qty
-            worker.pending_pieces += total_pieces
-            worker.payable_balance = max(0.0, float(worker.payable_balance) - float(txn.total_value))
-            worker.total_earned = max(0.0, float(worker.total_earned) - float(txn.total_value))
+                # If we are reversing a CREDIT_RECEIVED (Return):
+                # Return is cancelled -> restore pending pieces to worker, deduct erroneously added wage
+                elif txn.credit_qty > 0 or txn.rejected_qty > 0:
+                    total_pieces = txn.credit_qty + txn.rejected_qty
+                    worker.pending_pieces += total_pieces
+                    worker.payable_balance = max(0.0, float(worker.payable_balance) - float(txn.total_value))
+                    worker.total_earned = max(0.0, float(worker.total_earned) - float(txn.total_value))
 
-            comp_txn = MaterialTransaction(
-                transaction_code=reversal_code,
-                worker_id=worker.id,
-                distribution_id=txn.distribution_id,
-                item_id=txn.item_id,
-                item_name=f"[REVERSAL] {txn.item_name}",
-                item_code=txn.item_code,
-                transaction_date=date.today(),
-                transaction_type="LEDGER_CORRECTION",
-                debit_qty=0,
-                credit_qty=0,
-                rejected_qty=0,
-                rate_per_piece=txn.rate_per_piece,
-                total_value=0.0,
-                running_balance=worker.pending_pieces,
-                recorded_by_id=user_id,
-                recorded_by_name=user_name,
-                remarks=f"Reversal of {txn.transaction_code}: {req.reason}",
-            )
-            db.add(comp_txn)
+                    comp_txn = MaterialTransaction(
+                        transaction_code=reversal_code,
+                        worker_id=worker.id,
+                        distribution_id=txn.distribution_id,
+                        item_id=txn.item_id,
+                        item_name=f"[REVERSAL] {txn.item_name}",
+                        item_code=txn.item_code,
+                        transaction_date=date.today(),
+                        transaction_type="LEDGER_CORRECTION",
+                        debit_qty=0,
+                        credit_qty=0,
+                        rejected_qty=0,
+                        rate_per_piece=txn.rate_per_piece,
+                        total_value=0.0,
+                        running_balance=worker.pending_pieces,
+                        recorded_by_id=user_id,
+                        recorded_by_name=user_name,
+                        remarks=f"Reversal of {txn.transaction_code}: {req.reason}",
+                    )
+                    db.add(comp_txn)
 
-        audit = AuditLog(
-            user_id=user_id,
-            user_email=user_name,
-            action="TRANSACTION_REVERSED",
-            ip_address="127.0.0.1",
-            details=f"Reversed transaction {txn.transaction_code} for worker {worker.full_name}. Reason: {req.reason}",
-            timestamp_ist=format_ist_datetime(),
-        )
-        db.add(audit)
+                audit = AuditLog(
+                    user_id=user_id,
+                    user_email=user_name,
+                    action="TRANSACTION_REVERSED",
+                    ip_address="127.0.0.1",
+                    details=f"Reversed transaction {txn.transaction_code} for worker {worker.full_name}. Reason: {req.reason}",
+                    timestamp_ist=format_ist_datetime(),
+                )
+                db.add(audit)
 
-        db.commit()
-        db.refresh(txn)
-        return txn
+            db.refresh(txn)
+            return txn
+        except Exception as e:
+            logger.error(f"Error in atomic correct_ledger_entry: {e}")
+            raise

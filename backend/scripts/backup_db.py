@@ -1,88 +1,89 @@
-import os
+#!/usr/bin/env python3
+"""
+BandhSetu — Automated Database Backup CLI Utility
+Creates an atomic online backup, encrypts with AES-256-GCM,
+verifies integrity in a sandbox, and enforces backup retention.
+"""
 import sys
-import shutil
-import sqlite3
-import subprocess
-from datetime import datetime
+import argparse
 from pathlib import Path
 
-# Base paths
 BACKEND_DIR = Path(__file__).resolve().parent.parent
-BACKUP_DIR = BACKEND_DIR / "backups"
-BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+sys.path.insert(0, str(BACKEND_DIR))
 
-# Retention: Keep last 30 backups
-MAX_BACKUP_RETENTION = 30
+from app.services.backup_service import BackupService
 
 
-def backup_sqlite():
-    """Performs an atomic online backup of SQLite database without blocking connections."""
-    db_file = BACKEND_DIR / "bandhej_dev.db"
-    if not db_file.exists():
-        print(f"[ERROR] Database file not found at: {db_file}")
-        return False
+def main():
+    parser = argparse.ArgumentParser(description="BandhSetu Encrypted Database Backup Utility")
+    parser.add_argument("--type", choices=["FULL", "INCREMENTAL_WAL", "DAILY_AUTOMATED"], default="FULL")
+    parser.add_argument("--list", action="store_true", help="List all existing backups")
+    parser.add_argument("--verify", type=str, metavar="BACKUP_ID", help="Verify a specific backup in an isolated sandbox")
+    parser.add_argument("--restore-to", type=str, metavar="OUTPUT_PATH", help="Decrypt and restore backup to target path")
+    parser.add_argument("--backup-id", type=str, help="Backup ID to restore (used with --restore-to)")
 
-    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    backup_filename = f"bandhsetu_backup_{timestamp}.db"
-    backup_path = BACKUP_DIR / backup_filename
+    args = parser.parse_args()
 
-    print(f"[*] Starting SQLite online backup to: {backup_path.name}")
-    try:
-        # Use SQLite Online Backup API
-        src_conn = sqlite3.connect(str(db_file))
-        dst_conn = sqlite3.connect(str(backup_path))
-        with dst_conn:
-            src_conn.backup(dst_conn, pages=100)
-        src_conn.close()
-        dst_conn.close()
+    print("=" * 65)
+    print(" BANDHSETU — ENTERPRISE DATABASE BACKUP & RECOVERY")
+    print("=" * 65)
 
-        # Integrity verification
-        verify_conn = sqlite3.connect(str(backup_path))
-        cursor = verify_conn.cursor()
-        cursor.execute("PRAGMA integrity_check;")
-        result = cursor.fetchone()
-        verify_conn.close()
+    if args.list:
+        backups = BackupService.list_backups()
+        print(f"Total Backups: {len(backups)}\n")
+        for b in backups:
+            print(f"ID       : {b['backup_id']}")
+            print(f"Time IST : {b['timestamp_ist']}")
+            print(f"Type     : {b['backup_type']} | Size: {b['original_size_bytes'] / 1024:.1f} KB (Encrypted: {b['encrypted_size_bytes'] / 1024:.1f} KB)")
+            print(f"SHA256   : {b['sha256_plaintext'][:16]}...")
+            print(f"Counts   : {b.get('table_counts')}")
+            print("-" * 65)
+        return 0
 
-        if result and result[0] == "ok":
-            file_size_kb = backup_path.stat().st_size / 1024
-            print(f"[OK] Backup created successfully: {backup_path.name} ({file_size_kb:.1f} KB)")
-            print("[OK] Database integrity check: PASSED (ok)")
-            rotate_backups()
-            return True
-        else:
-            print(f"[FAIL] Database integrity check failed: {result}")
-            return False
+    if args.verify:
+        print(f"[*] Running sandboxed restoration verification for: {args.verify}...")
+        res = BackupService.verify_backup_in_sandbox(args.verify)
+        print(f"    - Integrity Check : {res['integrity_check']}")
+        print(f"    - Table Counts OK : {res['table_counts_verified']}")
+        print(f"    - Overall Status  : {'[PASSED] Recovery Viable' if res['verified'] else '[FAILED] Integrity Error'}")
+        return 0 if res["verified"] else 1
 
-    except Exception as e:
-        print(f"[ERROR] Backup failed: {e}")
-        return False
+    if args.restore_to:
+        if not args.backup_id:
+            # Pick latest
+            backups = BackupService.list_backups()
+            if not backups:
+                print("[ERROR] No backups found to restore.")
+                return 1
+            args.backup_id = backups[0]["backup_id"]
 
+        dest = Path(args.restore_to)
+        print(f"[*] Restoring backup {args.backup_id} to: {dest}...")
+        manifest = BackupService.decrypt_backup(args.backup_id, dest)
+        print(f"[OK] Database successfully restored and verified from manifest.")
+        print(f"     Source Timestamp : {manifest['timestamp_ist']}")
+        print(f"     SHA256 Plaintext : {manifest['sha256_plaintext']}")
+        return 0
 
-def rotate_backups():
-    """Maintains retention policy: keeps only the last N backups."""
-    backups = sorted(
-        BACKUP_DIR.glob("bandhsetu_backup_*.db"),
-        key=lambda p: p.stat().st_mtime,
-        reverse=True
-    )
-    if len(backups) > MAX_BACKUP_RETENTION:
-        print(f"[*] Cleaning up backups exceeding retention of {MAX_BACKUP_RETENTION}...")
-        for old_backup in backups[MAX_BACKUP_RETENTION:]:
-            try:
-                old_backup.unlink()
-                print(f"    - Removed old backup: {old_backup.name}")
-            except Exception as e:
-                print(f"    - Error removing {old_backup.name}: {e}")
+    # Default: Create a new backup
+    print(f"[*] Initiating {args.type} online backup with AES-256-GCM encryption...")
+    manifest = BackupService.create_encrypted_backup(backup_type=args.type)
+    print(f"[OK] Backup ID       : {manifest['backup_id']}")
+    print(f"[OK] Timestamp IST   : {manifest['timestamp_ist']}")
+    print(f"[OK] Original Size   : {manifest['original_size_bytes'] / 1024:.1f} KB")
+    print(f"[OK] Encrypted Size  : {manifest['encrypted_size_bytes'] / 1024:.1f} KB")
+    print(f"[OK] Plaintext Hash  : {manifest['sha256_plaintext']}")
+    print(f"[OK] Ciphertext Hash : {manifest['sha256_ciphertext']}")
+    print(f"[OK] Table Records   : {manifest['table_counts']}")
 
+    # Immediate verification
+    print("\n[*] Verifying backup restoration in sandbox...")
+    v = BackupService.verify_backup_in_sandbox(manifest["backup_id"])
+    print(f"[OK] Sandbox Test    : {'PASSED (Zero Data Loss)' if v['verified'] else 'FAILED'}")
 
-def run_backup():
-    print("=" * 60)
-    print("BANDHSETU — AUTOMATED DATABASE BACKUP UTILITY")
-    print("=" * 60)
-    success = backup_sqlite()
-    print("=" * 60)
-    return 0 if success else 1
+    print("=" * 65)
+    return 0
 
 
 if __name__ == "__main__":
-    sys.exit(run_backup())
+    sys.exit(main())
