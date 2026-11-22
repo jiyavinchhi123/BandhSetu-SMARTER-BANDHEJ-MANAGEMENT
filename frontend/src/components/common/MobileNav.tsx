@@ -35,8 +35,8 @@ export const MobileNav: React.FC = () => {
 
   return (
     <>
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 shadow-lg px-2 py-1 safe-area-pb">
-        <div className="grid grid-cols-5 items-center justify-around">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-[#FFF9F6]/95 backdrop-blur-md border-t border-[#F0E1E1] shadow-lg px-2 py-1 safe-area-pb">
+        <div className="flex items-center justify-around w-full">
           {mobileNavItems.map((item) => {
             const Icon = item.icon;
             return (
@@ -44,10 +44,10 @@ export const MobileNav: React.FC = () => {
                 key={item.path}
                 to={item.path}
                 className={({ isActive }) =>
-                  `flex flex-col items-center justify-center py-2 px-1 min-h-[52px] rounded-xl transition-all ${
+                  `flex flex-col items-center justify-center py-2 px-1 min-h-[52px] flex-1 min-w-0 max-w-[80px] rounded-xl transition-all ${
                     isActive
-                      ? 'text-brand-600 font-semibold'
-                      : 'text-slate-500 hover:text-slate-800 font-medium'
+                      ? 'text-[#A20D38] font-semibold'
+                      : 'text-[#786773] hover:text-[#30232A] font-medium'
                   }`
                 }
               >
@@ -55,12 +55,12 @@ export const MobileNav: React.FC = () => {
                   <>
                     <div
                       className={`p-1 rounded-lg transition-transform ${
-                        isActive ? 'bg-brand-50 text-brand-600 scale-110' : ''
+                        isActive ? 'bg-[#FCEDEC] text-[#A20D38] scale-110' : ''
                       }`}
                     >
                       <Icon className="w-5 h-5" />
                     </div>
-                    <span className="text-[10px] tracking-tight mt-0.5 truncate max-w-[60px]">
+                    <span className="text-[10px] tracking-tight mt-0.5 truncate max-w-[64px]">
                       {item.name}
                     </span>
                   </>
@@ -69,20 +69,20 @@ export const MobileNav: React.FC = () => {
             );
           })}
 
-          {/* 5th Tab: More Drawer Trigger */}
+          {/* More Drawer Trigger */}
           <button
             type="button"
             onClick={() => setIsMoreOpen(true)}
-            className={`flex flex-col items-center justify-center py-2 px-1 min-h-[52px] rounded-xl transition-all ${
+            className={`flex flex-col items-center justify-center py-2 px-1 min-h-[52px] flex-1 min-w-0 max-w-[80px] rounded-xl transition-all ${
               isMoreOpen
-                ? 'text-brand-600 font-semibold'
-                : 'text-slate-500 hover:text-slate-800 font-medium'
+                ? 'text-[#A20D38] font-semibold'
+                : 'text-[#786773] hover:text-[#30232A] font-medium'
             }`}
           >
             <div className="p-1 rounded-lg">
               <Menu className="w-5 h-5" />
             </div>
-            <span className="text-[10px] tracking-tight mt-0.5 truncate">
+            <span className="text-[10px] tracking-tight mt-0.5 truncate max-w-[64px]">
               {t('operations_menu', 'More')}
             </span>
           </button>
@@ -92,21 +92,24 @@ export const MobileNav: React.FC = () => {
       {/* Mobile "More" Slide-up Drawer */}
       {isMoreOpen && (
         <div
-          className="md:hidden fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-xs flex flex-col justify-end animate-fade-in"
+          className="md:hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex flex-col justify-end animate-fade-in"
           onClick={() => setIsMoreOpen(false)}
         >
           <div
-            className="bg-white rounded-t-3xl p-5 shadow-2xl space-y-3 pb-8"
+            className="bg-[#FFF9F6] rounded-t-3xl p-5 shadow-2xl space-y-3 pb-8 border-t border-[#F0E1E1]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <h3 className="font-bold text-slate-900 text-sm">
+            {/* Drawer Handle */}
+            <div className="w-10 h-1 bg-[#F0E1E1] rounded-full mx-auto mb-1" />
+
+            <div className="flex items-center justify-between pb-3 border-b border-[#F0E1E1]">
+              <h3 className="font-serif font-bold text-[#30232A] text-sm">
                 {t('operations_menu', 'Quick Actions & Settings')}
               </h3>
               <button
                 type="button"
                 onClick={() => setIsMoreOpen(false)}
-                className="p-1 text-slate-400 hover:text-slate-600 rounded-lg"
+                className="p-1.5 text-[#786773] hover:text-[#A20D38] rounded-full hover:bg-[#FCEDEC] transition-colors"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -117,9 +120,9 @@ export const MobileNav: React.FC = () => {
                 <NavLink
                   to="/managers"
                   onClick={() => setIsMoreOpen(false)}
-                  className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors"
+                  className="flex items-center gap-3 p-3 rounded-2xl hover:bg-[#FCEDEC] text-[#30232A] hover:text-[#A20D38] text-sm font-medium transition-colors"
                 >
-                  <ShieldAlert className="w-5 h-5 text-amber-600" />
+                  <ShieldAlert className="w-5 h-5 text-[#A20D38]" />
                   <span>{t('manager_access', 'Manager Access')}</span>
                 </NavLink>
               )}
@@ -127,9 +130,9 @@ export const MobileNav: React.FC = () => {
               <NavLink
                 to="/settings"
                 onClick={() => setIsMoreOpen(false)}
-                className="flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700 text-sm font-medium transition-colors"
+                className="flex items-center gap-3 p-3 rounded-2xl hover:bg-[#FCEDEC] text-[#30232A] hover:text-[#A20D38] text-sm font-medium transition-colors"
               >
-                <Settings className="w-5 h-5 text-slate-600" />
+                <Settings className="w-5 h-5 text-[#786773]" />
                 <span>{t('settings', 'Settings')}</span>
               </NavLink>
 
@@ -139,9 +142,9 @@ export const MobileNav: React.FC = () => {
                   setIsMoreOpen(false);
                   openLanguageModal();
                 }}
-                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-slate-50 text-slate-700 text-sm font-medium text-left transition-colors"
+                className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-[#FCEDEC] text-[#30232A] hover:text-[#A20D38] text-sm font-medium text-left transition-colors"
               >
-                <Languages className="w-5 h-5 text-brand-600" />
+                <Languages className="w-5 h-5 text-[#A20D38]" />
                 <span>{language === 'gu' ? 'English (અંગ્રેજી)' : 'ગુજરાતી ભાષા'}</span>
               </button>
 
@@ -151,7 +154,7 @@ export const MobileNav: React.FC = () => {
                   setIsMoreOpen(false);
                   logout();
                 }}
-                className="w-full flex items-center gap-3 p-3 rounded-xl hover:bg-rose-50 text-rose-600 text-sm font-medium text-left transition-colors pt-2 border-t border-slate-100"
+                className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-[#FCEDEC] text-[#A20D38] text-sm font-medium text-left transition-colors pt-3 border-t border-[#F0E1E1]"
               >
                 <LogOut className="w-5 h-5" />
                 <span>{t('sign_out', 'Sign Out')}</span>

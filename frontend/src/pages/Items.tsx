@@ -189,19 +189,20 @@ export const Items: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+            <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#30232A] tracking-tight">
               {t('bandhej_item_catalogue', 'Bandhej Item & Price Catalogue')}
             </h1>
-            <span className="px-2.5 py-0.5 text-xs font-semibold rounded-full bg-brand-100 text-brand-800 border border-brand-200">
+            <span className="px-3 py-0.5 text-xs font-semibold rounded-full bg-[#FCEDEC] text-[#A20D38] border border-[#F0E1E1]">
               {totalItems} {t('designs_unit', 'Designs')}
             </span>
           </div>
+          <p className="text-xs text-[#786773] mt-1">Manage Bandhani design items, knotting styles, and price protection rates</p>
         </div>
 
         {isAdmin && (
           <button
             onClick={handleOpenAdd}
-            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 bg-brand-600 hover:bg-brand-700 text-white font-medium text-sm rounded-xl shadow-sm transition-all focus:ring-2 focus:ring-brand-500/20 active:scale-95"
+            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-[#A20D38] hover:bg-[#880D32] text-white font-medium text-sm rounded-full shadow-xs transition-all active:scale-95"
           >
             <Plus className="w-4 h-4" />
             <span>{t('add_new_item', 'Add New Item')}</span>
@@ -210,86 +211,83 @@ export const Items: React.FC = () => {
       </div>
 
       {/* Metrics Row */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-brand-50 text-brand-600 flex items-center justify-center shrink-0">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <div className="bg-white p-5 rounded-3xl border border-[#F0E1E1] shadow-2xs flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-[#FCEDEC] text-[#A20D38] flex items-center justify-center shrink-0">
             <Package className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-xl font-bold text-slate-900">{totalItems}</div>
-            <div className="text-xs text-slate-500 font-medium">{t('total_designs', 'Total Designs')}</div>
+            <div className="font-serif text-2xl font-bold text-[#30232A]">{totalItems}</div>
+            <div className="text-xs text-[#786773] font-medium">{t('total_designs', 'Total Designs')}</div>
           </div>
         </div>
 
-        <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+        <div className="bg-white p-5 rounded-3xl border border-[#F0E1E1] shadow-2xs flex items-center gap-3">
+          <div className="w-11 h-11 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center shrink-0">
             <CheckCircle className="w-5 h-5" />
           </div>
           <div>
-            <div className="text-xl font-bold text-emerald-700">{activeItemsCount}</div>
-            <div className="text-xs text-slate-500 font-medium">{t('active_designs', 'Active Designs')}</div>
+            <div className="font-serif text-2xl font-bold text-emerald-800">{activeItemsCount}</div>
+            <div className="text-xs text-[#786773] font-medium">{t('active_designs', 'Active Designs')}</div>
           </div>
         </div>
       </div>
 
       {/* Search & Filter Toolbar */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col md:flex-row gap-3 items-center justify-between">
+      <div className="bg-white p-4 rounded-3xl border border-[#F0E1E1] shadow-2xs flex flex-col md:flex-row gap-3 items-center justify-between">
         <div className="relative w-full md:w-96">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+          <Search className="w-4 h-4 text-[#786773] absolute left-3.5 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             placeholder={t('search_items_placeholder', "Search items by design name or serial no... (e.g. 'Soni', '1', '2')")}
-            className="w-full pl-10 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+            className="w-full pl-10 pr-12 py-2.5 bg-[#FFF9F6] border border-[#F0E1E1] rounded-full text-xs sm:text-sm text-[#30232A] focus:outline-none focus:ring-2 focus:ring-[#A20D38]/20 focus:border-[#A20D38] transition-all"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-400 hover:text-slate-600"
+              className="absolute right-3.5 top-1/2 -translate-y-1/2 text-xs text-[#786773] hover:text-[#A20D38] font-semibold"
             >
               Clear
             </button>
           )}
         </div>
 
-        <div className="flex items-center gap-2 w-full md:w-auto">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 sm:pb-0 flex-nowrap w-full md:w-auto">
           <button
             onClick={() => setFilterActive(null)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              filterActive === null
-                ? 'bg-slate-900 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${filterActive === null
+              ? 'bg-[#A20D38] text-white shadow-2xs'
+              : 'bg-white text-[#786773] hover:bg-[#FCEDEC] hover:text-[#A20D38] border border-[#F0E1E1]'
+              }`}
           >
             {t('all', 'All')} ({totalItems})
           </button>
           <button
             onClick={() => setFilterActive(true)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              filterActive === true
-                ? 'bg-emerald-600 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${filterActive === true
+              ? 'bg-emerald-700 text-white shadow-2xs'
+              : 'bg-white text-emerald-800 hover:bg-emerald-50 border border-emerald-200'
+              }`}
           >
             {t('active_only', 'Active Only')}
           </button>
           <button
             onClick={() => setFilterActive(false)}
-            className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${
-              filterActive === false
-                ? 'bg-rose-600 text-white'
-                : 'bg-slate-100 text-slate-600 hover:bg-slate-200'
-            }`}
+            className={`px-3.5 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${filterActive === false
+              ? 'bg-rose-700 text-white shadow-2xs'
+              : 'bg-white text-rose-800 hover:bg-rose-50 border border-rose-200'
+              }`}
           >
             {t('inactive', 'Inactive')}
           </button>
           <button
             onClick={fetchItems}
             title="Refresh"
-            className="p-2 text-slate-500 hover:text-slate-700 bg-slate-100 rounded-lg hover:bg-slate-200 ml-auto md:ml-0"
+            className="p-2 text-[#786773] hover:text-[#A20D38] bg-white hover:bg-[#FCEDEC] border border-[#F0E1E1] rounded-full transition-all shrink-0 ml-auto md:ml-0 shadow-2xs"
           >
-            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
           </button>
         </div>
       </div>
@@ -382,11 +380,10 @@ export const Items: React.FC = () => {
                     </td>
                     <td className="py-3.5 px-4 text-center">
                       <span
-                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          item.is_active
-                            ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
-                            : 'bg-slate-100 text-slate-600 border border-slate-200'
-                        }`}
+                        className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-medium ${item.is_active
+                          ? 'bg-emerald-100 text-emerald-800 border border-emerald-200'
+                          : 'bg-slate-100 text-slate-600 border border-slate-200'
+                          }`}
                       >
                         {item.is_active ? (language === 'gu' ? 'સક્રિય' : 'Active') : (language === 'gu' ? 'નિષ્ક્રિય' : 'Inactive')}
                       </span>
@@ -405,11 +402,10 @@ export const Items: React.FC = () => {
                         </button>
                         <button
                           onClick={() => handleToggleStatus(item)}
-                          className={`p-1.5 rounded-lg transition-colors ${
-                            item.is_active
-                              ? 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
-                              : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
-                          }`}
+                          className={`p-1.5 rounded-lg transition-colors ${item.is_active
+                            ? 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
+                            : 'text-slate-400 hover:text-emerald-600 hover:bg-emerald-50'
+                            }`}
                           title={item.is_active ? 'Deactivate Item' : 'Activate Item'}
                         >
                           {item.is_active ? (
@@ -427,75 +423,75 @@ export const Items: React.FC = () => {
           </div>
 
           {/* Mobile Cards View */}
-          <div className="grid grid-cols-1 gap-3 md:hidden">
+          <div className="grid grid-cols-1 gap-3.5 md:hidden">
             {items.map((item) => (
               <div
                 key={item.id}
-                className="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm space-y-3"
+                className="bg-white p-5 rounded-3xl border border-[#F0E1E1] shadow-2xs space-y-3 relative overflow-hidden"
               >
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
-                        {item.id}
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1.5 flex-1 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs font-semibold text-[#880D32] bg-[#FCEDEC] px-2.5 py-0.5 rounded-full border border-[#F0E1E1]">
+                        #{item.id}
                       </span>
-                      <h3 className="font-semibold text-slate-900 text-base">
+                      <h3 className="font-serif font-bold text-[#30232A] text-base leading-snug">
                         {translateEntityName(item.item_name, language)}
                       </h3>
                       <span
-                        className={`px-2 py-0.5 rounded-full text-[10px] font-semibold ${
-                          item.is_active
-                            ? 'bg-emerald-100 text-emerald-800'
-                            : 'bg-slate-100 text-slate-600'
-                        }`}
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-semibold border ${item.is_active
+                          ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                          : 'bg-stone-100 text-[#786773] border-stone-200'
+                          }`}
                       >
                         {item.is_active ? (language === 'gu' ? 'સક્રિય' : 'Active') : (language === 'gu' ? 'નિષ્ક્રિય' : 'Inactive')}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+
+                    <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                       {item.item_type && (
-                        <span className="text-xs font-medium text-slate-700 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        <span className="text-xs font-medium text-[#786773] bg-[#FFF9F6] px-2.5 py-0.5 rounded-full border border-[#F0E1E1]">
                           {translateEntityName(item.item_type, language)}
                         </span>
                       )}
                       {item.is_sarkam && (
-                        <span className="bg-indigo-50 text-indigo-700 font-semibold px-1.5 py-0.5 rounded text-[10px] border border-indigo-200">
+                        <span className="bg-[#FCEDEC] text-[#A20D38] font-semibold px-2 py-0.5 rounded-full text-[10px] border border-[#F0E1E1]">
                           {language === 'gu' ? 'સરકમ' : 'Sarkam'}
                         </span>
                       )}
                       {item.is_choot && (
-                        <span className="bg-amber-50 text-amber-800 font-semibold px-1.5 py-0.5 rounded text-[10px] border border-amber-200">
+                        <span className="bg-amber-50 text-amber-900 font-semibold px-2 py-0.5 rounded-full text-[10px] border border-amber-200">
                           {language === 'gu' ? 'છૂટ' : 'Choot'}
                         </span>
                       )}
                     </div>
                   </div>
-                  <div className="text-right">
-                    <div className="text-lg font-bold text-slate-900">
+
+                  <div className="text-right shrink-0">
+                    <div className="font-serif text-lg font-bold text-[#A20D38]">
                       {formatINR(item.price_per_piece, true)}
                     </div>
-                    <div className="text-[10px] text-slate-400">{language === 'gu' ? 'ભાવ / પીસ' : 'per piece'}</div>
+                    <div className="text-[10px] text-[#786773] font-medium">{language === 'gu' ? 'ભાવ / પીસ' : 'per piece'}</div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-xs text-slate-400 pt-2 border-t border-slate-100">
-                  <span>Created: {formatIndianDate(item.created_at)}</span>
+                <div className="flex items-center justify-between text-xs text-[#786773] pt-3 border-t border-[#F0E1E1] gap-2 flex-wrap">
+                  <span className="text-[11px]">Added: {formatIndianDate(item.created_at)}</span>
 
                   {isAdmin && (
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2 ml-auto">
                       <button
                         onClick={() => handleOpenEdit(item)}
-                        className="px-2.5 py-1 text-xs font-medium text-slate-700 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center gap-1"
+                        className="px-3 py-1.5 text-xs font-semibold text-[#30232A] bg-white hover:bg-[#FCEDEC] hover:text-[#A20D38] rounded-full border border-[#F0E1E1] flex items-center gap-1 transition-all active:scale-95 shadow-2xs"
                       >
-                        <Edit2 className="w-3 h-3" /> Edit
+                        <Edit2 className="w-3 h-3 text-[#A20D38]" /> Edit
                       </button>
                       <button
                         onClick={() => handleToggleStatus(item)}
-                        className={`px-2.5 py-1 text-xs font-medium rounded-lg flex items-center gap-1 ${
-                          item.is_active
-                            ? 'text-rose-700 bg-rose-50 hover:bg-rose-100'
-                            : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
-                        }`}
+                        className={`px-3 py-1.5 text-xs font-semibold rounded-full flex items-center gap-1 transition-all active:scale-95 shadow-2xs ${item.is_active
+                          ? 'text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200'
+                          : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200'
+                          }`}
                       >
                         {item.is_active ? 'Deactivate' : 'Activate'}
                       </button>
@@ -673,8 +669,8 @@ export const Items: React.FC = () => {
                   {submitting
                     ? 'Saving...'
                     : editingItem
-                    ? 'Update Catalogue'
-                    : 'Add to Catalogue'}
+                      ? 'Update Catalogue'
+                      : 'Add to Catalogue'}
                 </button>
               </div>
             </form>

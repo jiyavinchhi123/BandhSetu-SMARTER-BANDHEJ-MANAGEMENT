@@ -13,18 +13,21 @@
 
 ## Key Highlights
 
-- **Role-Based Access Control**:
-  - **Owner / Administrator**: 24/7 unrestricted access, catalogue pricing, manager provisioning, lock controls, and audit trails.
+- **Role-Based Access Control (RBAC)**:
+  - **Owner / Administrator**: 24/7 unrestricted access, catalogue pricing, manager approval/lock controls, audit trails, and financial reporting.
   - **Workshop Manager**: Strictly permitted between **09:00 AM – 08:00 PM IST**. Automatic session revocation outside permitted hours.
+  - **Manager Registration & Approval Gate**: Managers can self-register via the login screen and are placed in pending approval status until verified and activated by an administrator.
   - **Zero Login for Artisans**: Women artisans do not have logins; their accounts are tracked through double-entry ledgers.
+- **Bilingual English & Gujarati Localization**:
+  - Full native Gujarati (ગુજરાતી) support across the entire interface (Khata, work distributions, payments, artisan directory, and settings).
 - **Historical Price Protection**:
-  - Consignments store an immutable unit rate snapshot (`rate_per_piece`). Subsequent catalogue price modifications never corrupt past batch records.
+  - Consignments store an immutable unit rate snapshot (`rate_per_piece`). Subsequent catalogue price modifications never alter past batch contracts.
 - **Strict Separation of Ledgers**:
   - **Material Ledger**: Worker-account perspective DEBIT (fabric given) and CREDIT (fabric returned).
   - **Money Ledger**: Worker-account perspective CREDIT (earned wages) and DEBIT (advances & wage payouts).
 - **Quality Inspection & Partial Returns**:
   - Supports multiple partial returns against a single consignment.
-  - Quality rejections (broken knots, torn fabric, dye bleed) earn **$\text{₹0.00}$** wage. Wages accrue **only** on accepted pieces.
+  - Quality rejections (broken knots, torn fabric, dye bleed) earn **₹0.00** wage. Wages accrue **only** on accepted pieces.
 - **Duplicate Payment Prevention**:
   - Prevents reusing payment reference numbers (UPI UTR / Bank Ref) and guards against rapid double-clicks.
 - **10 Real-Time Dashboard KPI Cards & 10 Specialized Reports**:
@@ -97,12 +100,15 @@ npm run dev
 
 ---
 
-## Default Demonstration Credentials
+## Workshop Credentials & Access Parameters
 
-| Role | Email | Mobile Number | Password | Operating Window |
-|---|---|---|---|---|
-| **Admin / Owner** | `admin@bandhej.com` | `+919876543210` | `Admin@123` | **24/7 Unrestricted** |
-| **Workshop Manager** | `manager@bandhej.com` | `+919876543211` | `Manager@123` | **09:00 AM – 08:00 PM IST** |
+| Role | Name | Email | Mobile Number | Password | Operating Window |
+|---|---|---|---|---|---|
+| **Primary Admin / Owner** | Pragnesh Vinchhi | `dev.vinchhi@gmail.com` | `+919426927175` | `admin@123` | **24/7 Unrestricted** |
+| **Executive Admin** | Hetal Vinchhi | `hetal@bandhej.com` | `+919537335737` | `admin@123` | **24/7 Unrestricted** |
+| **Workshop Manager** | Jiya Vinchhi | `jiya.vinchhi2412@gmail.com` | `+919426927907` | `admin@123` | **09:00 AM – 08:00 PM IST** |
+
+> **Note on Manager Registration**: Additional managers can register directly via the "Create Account / Register" option on the login screen. Newly registered managers remain in **Pending Approval** status until verified and approved by an administrator in the **Manager Access** panel.
 
 ---
 
@@ -115,6 +121,7 @@ Detailed documentation is available in the repository:
 - 🗄️ **[Database Schema Documentation](DATABASE_SCHEMA.md)**: Complete 10-table data dictionary, foreign keys, constraints, and historical snapshot rules.
 - 🔌 **[REST API Documentation](API_DOCUMENTATION.md)**: Endpoints, request/response formats, error codes, and curl examples.
 - 📘 **[Business Operations User Guide](USER_GUIDE.md)**: Workflow walkthrough for Owner and Manager from worker registration to payments.
+- 🛡️ **[System Architecture & Security Reference](bandhsetu_system_architecture_and_security.md)**: Complete technical specification of backend services, database schema, and security layers.
 
 ---
 

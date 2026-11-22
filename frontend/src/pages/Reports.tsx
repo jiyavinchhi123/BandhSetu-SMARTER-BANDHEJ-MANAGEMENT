@@ -246,9 +246,10 @@ export const Reports: React.FC = () => {
       {/* ------------------------------------------------------------- */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 print:hidden">
         <div>
-          <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
+          <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#30232A] tracking-tight">
             {t('reports_analytics', 'Reports & Analytics')}
           </h1>
+          <p className="text-xs text-[#786773] mt-0.5">Track artisan custody batches, issue timelines, and unreturned work</p>
         </div>
 
         {/* Action Buttons */}
@@ -256,26 +257,26 @@ export const Reports: React.FC = () => {
           <button
             onClick={() => fetchReport(true)}
             disabled={refreshing}
-            className="inline-flex items-center gap-1.5 px-3 py-2 text-xs font-medium text-slate-700 bg-white hover:bg-slate-50 rounded-xl border border-slate-200 shadow-sm transition-all active:scale-95 disabled:opacity-50"
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-[#786773] hover:text-[#A20D38] bg-white hover:bg-[#FCEDEC] rounded-full border border-[#F0E1E1] shadow-2xs transition-all active:scale-95 disabled:opacity-50"
             title="Refresh Report Data"
           >
-            <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${refreshing ? 'animate-spin' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 text-[#A20D38] ${refreshing ? 'animate-spin' : ''}`} />
             <span>{t('refresh', 'Refresh')}</span>
           </button>
 
           <button
             onClick={handleExportCsv}
             disabled={exporting}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-emerald-700 bg-emerald-50 hover:bg-emerald-100/80 rounded-xl border border-emerald-200 shadow-sm transition-all active:scale-95 disabled:opacity-60"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-emerald-800 bg-emerald-50 hover:bg-emerald-100/80 rounded-full border border-emerald-200 shadow-2xs transition-all active:scale-95 disabled:opacity-60"
             title="Export to CSV / Excel"
           >
-            <FileSpreadsheet className={`w-4 h-4 text-emerald-600 ${exporting ? 'animate-pulse' : ''}`} />
+            <FileSpreadsheet className={`w-4 h-4 text-emerald-700 ${exporting ? 'animate-pulse' : ''}`} />
             <span>{exporting ? 'Exporting...' : t('export_excel_csv', 'Export Excel/CSV')}</span>
           </button>
 
           <button
             onClick={handlePrint}
-            className="inline-flex items-center gap-1.5 px-3.5 py-2 text-xs font-medium text-white bg-slate-900 hover:bg-slate-800 rounded-xl shadow-sm transition-all active:scale-95"
+            className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-white bg-[#A20D38] hover:bg-[#880D32] rounded-full shadow-2xs transition-all active:scale-95"
             title="Print Report"
           >
             <Printer className="w-4 h-4" />
@@ -287,7 +288,33 @@ export const Reports: React.FC = () => {
       {/* ------------------------------------------------------------- */}
       {/* 2. SEARCH & FILTER PANEL */}
       {/* ------------------------------------------------------------- */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-5 space-y-4 print:hidden">
+      <div className="bg-white rounded-3xl border border-[#F0E1E1] shadow-2xs p-4 sm:p-6 space-y-4 print:hidden">
+        {/* Quick Date Range Preset Pills */}
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 flex-nowrap">
+          <span className="text-[#786773] text-xs font-semibold mr-1 flex items-center gap-1 shrink-0">
+            <Calendar className="w-3.5 h-3.5 text-[#A20D38]" /> Preset:
+          </span>
+          {[
+            { id: 'this_month', label: language === 'gu' ? 'આ મહિને' : 'This Month' },
+            { id: 'prev_month', label: language === 'gu' ? 'ગયા મહિને' : 'Last Month' },
+            { id: 'last_30_days', label: language === 'gu' ? 'છેલ્લા ૩૦ દિવસ' : 'Last 30 Days' },
+            { id: 'all_time', label: language === 'gu' ? 'તમામ સમય' : 'All Time' },
+          ].map((preset) => (
+            <button
+              key={preset.id}
+              type="button"
+              onClick={() => handlePresetSelect(preset.id as DatePreset)}
+              className={`px-3 py-1 rounded-full text-xs font-semibold whitespace-nowrap transition-all ${
+                datePreset === preset.id
+                  ? 'bg-[#A20D38] text-white shadow-2xs'
+                  : 'bg-[#FFF9F6] text-[#786773] hover:bg-[#FCEDEC] hover:text-[#A20D38] border border-[#F0E1E1]'
+              }`}
+            >
+              {preset.label}
+            </button>
+          ))}
+        </div>
+
         {/* Inputs Grid: Date Range, Search Query, Town, Design */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
           {/* From Date */}
@@ -482,7 +509,7 @@ export const Reports: React.FC = () => {
             <>
               {/* Desktop Table View */}
               <div className="hidden md:block overflow-x-auto">
-                <table className="w-full text-left border-collapse text-xs">
+                <table className="w-full text-left border-collapse text-xs min-w-[650px]">
                   <thead>
                     <tr className="bg-slate-50/80 border-b border-slate-200 text-slate-500 uppercase tracking-wider font-semibold text-[11px]">
                       <th className="py-3 px-4">{t('table_date', 'Date')}</th>
@@ -691,7 +718,7 @@ export const Reports: React.FC = () => {
 
                 {/* Sub-table for this Artisan's Pending Distributions */}
                 <div className="overflow-x-auto">
-                  <table className="w-full text-left border-collapse text-xs">
+                  <table className="w-full text-left border-collapse text-xs min-w-[550px]">
                     <thead>
                       <tr className="bg-white border-b border-slate-100 text-slate-400 uppercase tracking-wider font-semibold text-[10px]">
                         <th className="py-2.5 px-4">{language === 'gu' ? 'આપ્યા તારીખ' : 'Date Given'}</th>

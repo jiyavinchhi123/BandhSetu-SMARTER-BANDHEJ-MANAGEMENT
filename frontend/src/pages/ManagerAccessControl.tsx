@@ -266,10 +266,11 @@ export const ManagerAccessControl: React.FC = () => {
       {/* Page Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
-          <h2 className="text-xl sm:text-2xl font-bold text-slate-900 flex items-center gap-2">
-            <ShieldCheck className="w-6 h-6 text-brand-600" />
+          <h2 className="font-serif text-2xl sm:text-3xl font-bold text-[#30232A] flex items-center gap-2">
+            <ShieldCheck className="w-6 h-6 text-[#A20D38]" />
             {t('manager_access', 'Manager Access')}
           </h2>
+          <p className="text-xs text-[#786773] mt-0.5">Control operating hours, active states, and session tokens for workshop managers</p>
         </div>
 
         <div className="flex items-center gap-2">
@@ -414,7 +415,7 @@ export const ManagerAccessControl: React.FC = () => {
                     <Button
                       variant="primary"
                       size="sm"
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs flex-1 sm:flex-initial justify-center"
                       disabled={approvingManagerId === m.id}
                       isLoading={approvingManagerId === m.id}
                       onClick={() => handleApproveManager(m)}
@@ -424,6 +425,7 @@ export const ManagerAccessControl: React.FC = () => {
                     <Button
                       variant="danger"
                       size="sm"
+                      className="flex-1 sm:flex-initial justify-center"
                       disabled={deletingManagerId === m.id}
                       isLoading={deletingManagerId === m.id}
                       onClick={() => handleDeleteManager(m)}
@@ -437,7 +439,7 @@ export const ManagerAccessControl: React.FC = () => {
                       <Button
                         variant="primary"
                         size="sm"
-                        className="bg-emerald-600 hover:bg-emerald-700"
+                        className="bg-emerald-600 hover:bg-emerald-700 flex-1 sm:flex-initial justify-center min-w-[100px]"
                         icon={<Unlock className="w-3.5 h-3.5" />}
                         onClick={() => handleUnlock(m)}
                       >
@@ -447,6 +449,7 @@ export const ManagerAccessControl: React.FC = () => {
                       <Button
                         variant="danger"
                         size="sm"
+                        className="flex-1 sm:flex-initial justify-center min-w-[100px]"
                         icon={<Lock className="w-3.5 h-3.5" />}
                         onClick={() => setSelectedManagerForLock(m)}
                       >
@@ -457,6 +460,7 @@ export const ManagerAccessControl: React.FC = () => {
                     <Button
                       variant="outline"
                       size="sm"
+                      className="flex-1 sm:flex-initial justify-center min-w-[90px]"
                       icon={<Clock className="w-3.5 h-3.5" />}
                       onClick={() => {
                         setEditingTimingManager(m);
@@ -470,6 +474,7 @@ export const ManagerAccessControl: React.FC = () => {
                     <Button
                       variant="outline"
                       size="sm"
+                      className="flex-1 sm:flex-initial justify-center min-w-[90px]"
                       onClick={() => {
                         setExtendingManager(m);
                         setExtendMinutes(60);
@@ -482,7 +487,7 @@ export const ManagerAccessControl: React.FC = () => {
                       variant="ghost"
                       size="sm"
                       disabled={togglingManagerId === m.id}
-                      className={isActive ? 'text-slate-600' : 'text-emerald-700 font-semibold'}
+                      className={`flex-1 sm:flex-initial justify-center min-w-[80px] ${isActive ? 'text-slate-600' : 'text-emerald-700 font-semibold'}`}
                       onClick={() => handleToggleActive(m)}
                     >
                       <Power className={`w-3.5 h-3.5 mr-1 ${togglingManagerId === m.id ? 'animate-spin' : ''}`} />
@@ -492,7 +497,7 @@ export const ManagerAccessControl: React.FC = () => {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-rose-600 hover:bg-rose-50 ml-auto"
+                      className="text-rose-600 hover:bg-rose-50 flex-1 sm:flex-initial justify-center min-w-[75px]"
                       disabled={deletingManagerId === m.id}
                       isLoading={deletingManagerId === m.id}
                       onClick={() => handleDeleteManager(m)}

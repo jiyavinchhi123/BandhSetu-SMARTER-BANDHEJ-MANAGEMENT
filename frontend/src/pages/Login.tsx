@@ -20,6 +20,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { Button, Input, Card } from '../components/ui';
 import { APP_NAME, APP_TAGLINE } from '../utils/constants';
 import { api } from '../services/api';
+import { BandhaniLogo } from '../components/common/BandhaniMotif';
 
 export const Login: React.FC = () => {
   const navigate = useNavigate();
@@ -161,9 +162,9 @@ export const Login: React.FC = () => {
     } catch (err: any) {
       setErrorMessage(
         err.message ||
-          (language === 'gu'
-            ? 'રજીસ્ટ્રેશન કરવામાં ભૂલ આવી. કૃપા કરીને ફરી પ્રયાસ કરો.'
-            : 'Registration failed. Please check the details and try again.')
+        (language === 'gu'
+          ? 'રજીસ્ટ્રેશન કરવામાં ભૂલ આવી. કૃપા કરીને ફરી પ્રયાસ કરો.'
+          : 'Registration failed. Please check the details and try again.')
       );
     } finally {
       setIsSubmittingReg(false);
@@ -171,34 +172,35 @@ export const Login: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-craft-surface via-slate-50 to-brand-50/20 relative">
+    <div className="min-h-screen flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-[#FFF9F6] relative">
       {/* Top Language Toggle */}
       <div className="absolute top-4 right-4 sm:top-6 sm:right-6">
         <button
           type="button"
           onClick={() => setLanguage(language === 'gu' ? 'en' : 'gu')}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-brand-300 bg-white shadow-2xs text-xs font-semibold text-slate-700 hover:text-brand-700 transition-all active:scale-95 cursor-pointer"
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-[#F0E1E1] hover:border-[#A20D38]/40 bg-white shadow-2xs text-xs font-semibold text-[#30232A] hover:text-[#A20D38] transition-all active:scale-95 cursor-pointer"
           title="Change Language / ભાષા બદલો"
         >
-          <Languages className="w-3.5 h-3.5 text-brand-600" />
+          <Languages className="w-3.5 h-3.5 text-[#A20D38]" />
           <span>{language === 'gu' ? 'ગુજરાતી' : 'English'}</span>
         </button>
       </div>
 
       <div className="sm:mx-auto sm:w-full sm:max-w-md">
         {/* Main Card with Branding Inside */}
-        <Card className="shadow-xl border-slate-200 p-6 sm:p-8">
+        <Card className="shadow-xl border-[#F0E1E1] p-6 sm:p-10 rounded-3xl bg-white">
           {/* Branding */}
           <div className="flex flex-col items-center text-center mb-6">
-            <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-brand-600 to-rose-500 text-white flex items-center justify-center shadow-lg shadow-brand-500/30 mb-3">
-              <Sparkles className="w-8 h-8" />
-            </div>
-            <h2 className="text-2xl sm:text-3xl font-extrabold text-slate-900 tracking-tight">
-              {APP_NAME}
-            </h2>
-            <p className="mt-1 text-xs sm:text-sm text-slate-500 font-medium">
-              {language === 'gu' ? 'બાંધેજ કારીગર અને હિસાબ સંચાલન' : APP_TAGLINE}
-            </p>
+            <img
+              src="/bandhsetu-logo.png"
+              alt="BandhSetu — Smarter Bandhej Management"
+              className="w-56 sm:w-64 max-w-full h-auto object-contain mb-2 filter drop-shadow-xs"
+            />
+            {language === 'gu' && (
+              <p className="mt-1 text-xs text-[#786773] font-medium">
+                બાંધેજ કારીગર અને હિસાબ સંચાલન
+              </p>
+            )}
           </div>
 
           {/* Success Notification */}
@@ -441,6 +443,11 @@ export const Login: React.FC = () => {
             </form>
           )}
         </Card>
+
+        {/* Footer */}
+        <p className="mt-6 text-center text-xs text-[#786773] font-medium tracking-wide select-none">
+          © 2026 BandhSetu | All Rights Reserved | Made with <span className="text-[#A20D38]">❤️</span> by Jiya Vinchhi
+        </p>
       </div>
     </div>
   );

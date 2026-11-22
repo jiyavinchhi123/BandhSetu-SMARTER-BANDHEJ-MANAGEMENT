@@ -441,20 +441,20 @@ export const WorkerProfile: React.FC = () => {
       </div>
 
       {/* Hero Card: Worker Identity & Key Accounting Stats */}
-      <Card className="p-5 sm:p-6 border-slate-200 bg-white shadow-2xs space-y-6">
+      <Card className="p-6 sm:p-7 border-[#F0E1E1] bg-white rounded-3xl shadow-2xs space-y-6">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-6">
           {/* Identity & Contact */}
           <div className="flex items-start gap-4">
-            <div className="w-14 h-14 rounded-2xl bg-brand-600 text-white flex items-center justify-center font-bold text-xl shadow-xs shrink-0">
+            <div className="w-14 h-14 rounded-2xl bg-[#A20D38] text-white flex items-center justify-center font-serif font-bold text-xl shadow-xs shrink-0">
               {worker.full_name.split(' ').map((n) => n[0]).join('')}
             </div>
 
             <div className="space-y-1">
               <div className="flex items-center gap-2.5 flex-wrap">
-                <span className="font-mono text-xs font-bold text-brand-800 bg-brand-50 px-2.5 py-0.5 rounded-md border border-brand-200">
+                <span className="font-mono text-xs font-bold text-[#A20D38] bg-[#FCEDEC] px-2.5 py-0.5 rounded-full border border-[#F0E1E1]">
                   {worker.serial_number}
                 </span>
-                <h1 className="text-xl sm:text-2xl font-bold text-slate-900">
+                <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#30232A]">
                   {translateEntityName(worker.full_name, language)}
                 </h1>
                 <Badge variant={worker.status === 'Active' ? 'success' : 'neutral'} dot>
@@ -481,12 +481,13 @@ export const WorkerProfile: React.FC = () => {
           </div>
 
           {/* Action Buttons */}
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 w-full sm:w-auto shrink-0">
             <Button
               variant="outline"
               size="sm"
               icon={<Edit className="w-3.5 h-3.5" />}
               onClick={() => setIsEditOpen(true)}
+              className="w-full sm:w-auto justify-center"
             >
               {t('edit_details', 'Edit Details')}
             </Button>
@@ -550,13 +551,13 @@ export const WorkerProfile: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap w-full sm:w-auto">
             <Button
               variant="primary"
               size="sm"
               icon={<Plus className="w-3.5 h-3.5" />}
               onClick={() => setIsDistributeOpen(true)}
-              className="font-medium text-xs shadow-2xs"
+              className="font-medium text-xs shadow-2xs flex-1 sm:flex-initial justify-center min-w-[95px]"
             >
               {t('give_work', '+ Give Work')}
             </Button>
@@ -572,7 +573,7 @@ export const WorkerProfile: React.FC = () => {
                   showToast({ type: 'info', title: 'No Pending Work', message: 'All given work has been returned.' });
                 }
               }}
-              className="border-slate-200 text-slate-700 bg-white hover:bg-slate-50 font-medium text-xs shadow-2xs"
+              className="border-slate-200 text-slate-700 bg-white hover:bg-slate-50 font-medium text-xs shadow-2xs flex-1 sm:flex-initial justify-center min-w-[95px]"
             >
               {t('receive_return', 'Receive Return')}
             </Button>
@@ -581,7 +582,7 @@ export const WorkerProfile: React.FC = () => {
               size="sm"
               icon={<IndianRupee className="w-3.5 h-3.5 text-slate-600" />}
               onClick={handleOpenPaymentModal}
-              className="border-slate-200 text-slate-700 bg-white hover:bg-slate-50 font-medium text-xs shadow-2xs"
+              className="border-slate-200 text-slate-700 bg-white hover:bg-slate-50 font-medium text-xs shadow-2xs flex-1 sm:flex-initial justify-center min-w-[95px]"
             >
               {t('make_payment', 'Make Payment')}
             </Button>
@@ -612,7 +613,7 @@ export const WorkerProfile: React.FC = () => {
             </div>
 
             <div className="overflow-x-auto flex-1">
-              <table className="w-full text-left border-collapse text-xs table-fixed">
+              <table className="w-full text-left border-collapse text-xs table-fixed min-w-[440px]">
                 <thead>
                   <tr className="bg-emerald-50/40 border-b border-slate-200 text-[10px] sm:text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                     <th className="py-2.5 px-3 w-[22%]">{t('col_date', 'Date')}</th>
@@ -688,7 +689,7 @@ export const WorkerProfile: React.FC = () => {
             </div>
 
             <div className="overflow-x-auto flex-1">
-              <table className="w-full text-left border-collapse text-xs table-fixed">
+              <table className="w-full text-left border-collapse text-xs table-fixed min-w-[440px]">
                 <thead>
                   <tr className="bg-rose-50/40 border-b border-slate-200 text-[10px] sm:text-[11px] font-bold text-slate-600 uppercase tracking-wider">
                     <th className="py-2.5 px-3 w-[22%]">{t('col_date', 'Date')}</th>

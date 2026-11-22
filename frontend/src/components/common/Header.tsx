@@ -1,9 +1,11 @@
-import React from 'react';
-import { Search, Sparkles, LogOut, ShieldCheck, UserCheck, Clock, Languages } from 'lucide-react';
+import React, { useState } from 'react';
+import { Search, LogOut, ChevronDown, Languages, User as UserIcon } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { APP_NAME } from '../../utils/constants';
 import { useAuth } from '../../context/AuthContext';
 import { useLanguage } from '../../context/LanguageContext';
 import { translateEntityName } from '../../utils/translations';
+import { BandhaniLogo } from './BandhaniMotif';
 
 interface HeaderProps {
   searchTerm: string;
@@ -17,109 +19,122 @@ export const Header: React.FC<HeaderProps> = ({
 }) => {
   const { user, role, logout } = useAuth();
   const { language, openLanguageModal, t } = useLanguage();
+  const navigate = useNavigate();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+
+  const initials = user?.full_name
+    ? user.full_name
+        .split(' ')
+        .map((n) => n[0])
+        .slice(0, 2)
+        .join('')
+        .toUpperCase()
+    : 'BM';
 
   return (
-    <header className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 py-3 transition-all">
+    <header className="sticky top-0 z-30 bg-[#FFF9F6]/90 backdrop-blur-md border-b border-[#F0E1E1] px-4 sm:px-8 py-3 transition-all">
       <div className="flex items-center justify-between gap-4">
         {/* Mobile Logo Branding */}
-        <div className="flex items-center gap-2.5 md:hidden">
-          <div className="w-9 h-9 rounded-xl bg-brand-600 text-white flex items-center justify-center shadow-sm">
-            <Sparkles className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="font-bold text-slate-900 text-sm leading-tight">{APP_NAME}</h1>
-            <p className="text-[10px] text-slate-500 font-medium">Operations</p>
-          </div>
+        <div className="flex items-center gap-2 md:hidden">
+          <img
+            src="/bandhsetu-logo.png"
+            alt="BandhSetu"
+            className="h-9 w-auto object-contain"
+          />
         </div>
 
         {/* Global Fast Search Bar */}
-        <div className="flex-1 max-w-md hidden sm:block">
+        <div className="flex-1 max-w-xl hidden sm:block">
           <div className="relative">
-            <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            <Search className="w-4 h-4 text-[#786773] absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
             <input
               type="text"
               value={searchTerm}
               onChange={(e) => onSearchChange(e.target.value)}
-              placeholder={t('search_global_placeholder', 'Search artisan workers, designs, town...')}
-              className="w-full pl-9 pr-4 py-2 bg-slate-50 hover:bg-slate-100/80 focus:bg-white text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all"
+              placeholder={t('search_global_placeholder', 'Search artisan workers...')}
+              className="w-full pl-11 pr-4 py-2.5 bg-white hover:bg-white/90 focus:bg-white text-xs sm:text-sm text-[#30232A] placeholder:text-[#786773]/70 rounded-full border border-[#F0E1E1] focus:outline-none focus:ring-2 focus:ring-[#A20D38]/20 focus:border-[#A20D38] shadow-2xs transition-all"
             />
           </div>
         </div>
 
         {/* Action icons & profile */}
         <div className="flex items-center gap-3">
-          {/* Manager operating hours indicator */}
-          {role === 'manager' && user && (
-            <div className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-xs font-semibold">
-              <Clock className="w-3.5 h-3.5 text-amber-600" />
-              <span>{t('operating_hours_prefix', 'Hours:')} {user.access_start_time} – {user.access_end_time} IST</span>
-            </div>
-          )}
-
           {/* Language Switcher Pill */}
           <button
             type="button"
             onClick={openLanguageModal}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 hover:border-brand-300 bg-slate-50 hover:bg-brand-50/60 text-xs font-semibold text-slate-700 hover:text-brand-700 transition-all active:scale-95 shadow-2xs"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full border border-[#F0E1E1] hover:border-[#A20D38]/40 bg-white hover:bg-[#FCEDEC]/50 text-xs font-semibold text-[#30232A] transition-all active:scale-95 shadow-2xs"
             title="Change Language / ભાષા બદલો"
           >
-            <Languages className="w-3.5 h-3.5 text-brand-600" />
+            <Languages className="w-3.5 h-3.5 text-[#A20D38]" />
             <span className="font-medium hidden sm:inline">{language === 'gu' ? 'ગુજરાતી' : 'English'}</span>
             <span className="font-bold sm:hidden">{language === 'gu' ? 'ગુ' : 'EN'}</span>
           </button>
 
-          {/* User Profile Pill */}
-          <div className="flex items-center gap-2.5 pl-2 border-l border-slate-200">
-            <div
-              className={`w-9 h-9 rounded-full flex items-center justify-center font-bold text-xs shadow-sm ${
-                role === 'admin'
-                  ? 'bg-gradient-to-tr from-brand-500 to-amber-500 text-white'
-                  : 'bg-slate-800 text-white'
-              }`}
-            >
-              {user?.full_name ? user.full_name.split(' ').map((n) => n[0]).join('') : 'U'}
-            </div>
-            <div className="hidden md:block text-left">
-              <p className="text-xs font-semibold text-slate-800 leading-tight">
-                {user?.full_name ? translateEntityName(user.full_name, language) : 'Loading...'}
-              </p>
-              <p className="text-[10px] text-slate-500 font-medium flex items-center gap-1">
-                {role === 'admin' ? (
-                  <>
-                    <ShieldCheck className="w-3 h-3 text-brand-600" />
-                    <span>{t('owner_admin_role', 'Owner / Admin (24/7)')}</span>
-                  </>
-                ) : (
-                  <>
-                    <UserCheck className="w-3 h-3 text-amber-600" />
-                    <span>{t('workshop_manager_role', 'Workshop Manager')}</span>
-                  </>
-                )}
-              </p>
-            </div>
-
+          {/* User Profile Pill with Dropdown */}
+          <div className="relative">
             <button
-              onClick={() => logout()}
-              className="p-2 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors ml-1"
-              title="Sign Out"
+              type="button"
+              onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+              className="flex items-center gap-2.5 pl-2 py-1 pr-2 rounded-full hover:bg-white/80 active:scale-95 transition-all border border-transparent hover:border-[#F0E1E1]"
             >
-              <LogOut className="w-4 h-4" />
+              <div className="w-9 h-9 rounded-full bg-[#880D32] text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
+                {initials}
+              </div>
+              <div className="hidden md:block text-left">
+                <p className="text-xs font-bold text-[#30232A] leading-tight">
+                  {user?.full_name ? translateEntityName(user.full_name, language) : 'Bhavna Mehta'}
+                </p>
+                <p className="text-[10px] text-[#786773] font-medium leading-none mt-0.5">
+                  {role === 'admin' ? 'Admin' : 'Manager'}
+                </p>
+              </div>
+              <ChevronDown className="w-3.5 h-3.5 text-[#786773] hidden md:block" />
             </button>
-          </div>
-        </div>
-      </div>
 
-      {/* Mobile search input for screens < sm */}
-      <div className="mt-2.5 sm:hidden">
-        <div className="relative">
-          <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-          <input
-            type="text"
-            value={searchTerm}
-            onChange={(e) => onSearchChange(e.target.value)}
-            placeholder="Search workers, designs..."
-            className="w-full pl-9 pr-3.5 py-2.5 bg-slate-50 text-xs text-slate-800 placeholder:text-slate-400 rounded-xl border border-slate-200 focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 transition-all min-h-[42px]"
-          />
+            {isDropdownOpen && (
+              <>
+                {/* Backdrop for click-away on mobile touch */}
+                <div
+                  className="fixed inset-0 z-40"
+                  onClick={() => setIsDropdownOpen(false)}
+                />
+                <div
+                  className="absolute right-0 mt-2 w-48 bg-white rounded-2xl shadow-lg border border-[#F0E1E1] py-1.5 z-50 animate-fade-in"
+                  onMouseLeave={() => setIsDropdownOpen(false)}
+                >
+                  <div className="px-4 py-2 border-b border-[#F0E1E1]">
+                    <p className="text-xs font-bold text-[#30232A] truncate">
+                      {user?.full_name ? translateEntityName(user.full_name, language) : 'User'}
+                    </p>
+                    <p className="text-[11px] text-[#786773] truncate">{user?.email || ''}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      navigate('/settings');
+                    }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-[#30232A] hover:bg-[#FCEDEC] hover:text-[#A20D38] transition-colors"
+                  >
+                    <UserIcon className="w-3.5 h-3.5 text-[#786773]" />
+                    <span>{t('settings', 'Settings')}</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsDropdownOpen(false);
+                      logout();
+                    }}
+                    className="w-full flex items-center gap-2.5 px-4 py-2.5 text-xs text-rose-600 hover:bg-rose-50 transition-colors"
+                  >
+                    <LogOut className="w-3.5 h-3.5 text-rose-500" />
+                    <span>{t('sign_out', 'Sign Out')}</span>
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
     </header>

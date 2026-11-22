@@ -152,20 +152,21 @@ export const Settings: React.FC = () => {
     <div className="space-y-6 max-w-4xl pb-16">
       {/* Header */}
       <div>
-        <h1 className="text-xl sm:text-2xl font-bold text-slate-900 tracking-tight">
+        <h1 className="font-serif text-2xl sm:text-3xl font-bold text-[#30232A] tracking-tight">
           {t('settings', 'Settings')}
         </h1>
+        <p className="text-xs text-[#786773] mt-0.5">Manage your workshop profile and security credentials</p>
       </div>
 
       {/* LOGIN CREDENTIALS UPDATE CARD */}
-      <Card className="p-5 sm:p-6 border-slate-200/90 shadow-xs space-y-5">
-        <div className="flex items-center justify-between border-b border-slate-100 pb-3">
-          <div className="flex items-center gap-2.5">
-            <div className="p-2 rounded-xl bg-brand-50 text-brand-600">
+      <Card className="p-6 sm:p-8 border-[#F0E1E1] rounded-3xl shadow-2xs space-y-5 bg-white">
+        <div className="flex items-center justify-between border-b border-[#F0E1E1] pb-4">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-[#FCEDEC] text-[#A20D38]">
               <KeyRound className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-bold text-base text-slate-900">
+              <h2 className="font-serif text-lg font-bold text-[#30232A]">
                 {t('credentials_update_title', 'Login Credentials & Profile')}
               </h2>
               <p className="text-xs text-slate-500">
@@ -343,6 +344,7 @@ export const Settings: React.FC = () => {
               size="md"
               isLoading={isUpdatingCredentials}
               icon={<Save className="w-4 h-4" />}
+              className="w-full sm:w-auto justify-center"
             >
               {t('save_credentials_btn', 'Update Login Credentials')}
             </Button>

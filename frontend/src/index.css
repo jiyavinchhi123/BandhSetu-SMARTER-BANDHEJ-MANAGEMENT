@@ -7,7 +7,8 @@
     -webkit-tap-highlight-color: transparent;
   }
   body {
-    @apply bg-craft-surface text-slate-800;
+    background-color: #FFF9F6;
+    color: #30232A;
     font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   }
 }
@@ -18,14 +19,25 @@
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #f1f5f9;
+  background: #FCEDEC;
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: #F0E1E1;
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: #DE475B;
+}
+
+/* Bandhani Dot Motif Utilities */
+.bandhani-pattern {
+  background-image: radial-gradient(#A20D38 1px, transparent 1px);
+  background-size: 16px 16px;
+}
+
+.bandhani-pattern-subtle {
+  background-image: radial-gradient(rgba(162, 13, 56, 0.12) 1.5px, transparent 1.5px);
+  background-size: 14px 14px;
 }
 
 /* Touch friendly minimum tap target */
