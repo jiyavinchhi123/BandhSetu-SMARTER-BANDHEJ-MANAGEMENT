@@ -21,56 +21,52 @@ export const Header: React.FC<HeaderProps> = () => {
 
   const initials = user?.full_name
     ? user.full_name
-        .split(' ')
-        .map((n) => n[0])
-        .slice(0, 2)
-        .join('')
-        .toUpperCase()
+      .split(' ')
+      .map((n) => n[0])
+      .slice(0, 2)
+      .join('')
+      .toUpperCase()
     : 'BM';
 
   return (
-    <header className="sticky top-0 z-30 bg-[#FFF9F6]/90 backdrop-blur-md border-b border-[#F0E1E1] px-4 sm:px-8 py-3 transition-all">
-      <div className="flex items-center justify-between gap-4">
+    <header className="sticky top-0 z-30 bg-[#FFF9F6]/90 backdrop-blur-md border-b border-[#F0E1E1] transition-all">
+      <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-4">
         {/* Mobile Logo Branding & Active Company */}
         <div className="flex items-center gap-2.5 md:hidden">
           <img
             src="/bandhsetu-logo.png"
             alt="BandhSetu"
-            className="h-8 w-auto object-contain"
+            className="h-9 w-auto object-contain"
           />
-          <div className="flex flex-col border-l border-[#F0E1E1] pl-2">
-            <span className="text-xs font-bold text-[#30232A] truncate max-w-[130px]">
+          <div className="flex flex-col border-l border-[#F0E1E1] pl-2.5">
+            <span className="text-sm font-bold text-[#30232A] truncate max-w-[150px]">
               {companyName || 'Vinchhi Bandhej'}
             </span>
-            <span className="text-[9px] font-semibold text-[#A20D38]">
+            <span className="text-[11px] font-bold text-[#A20D38]">
               {companyCode || 'COMP-0001'}
             </span>
           </div>
         </div>
 
-        {/* Company Identity Display (Replaces old search position) */}
-        <div className="flex-1 max-w-xl hidden md:flex items-center">
-          <div className="flex items-center gap-3 bg-white/90 border border-[#F0E1E1] shadow-2xs rounded-2xl px-4 py-2 hover:border-[#A20D38]/30 transition-all">
-            <div className="w-8 h-8 rounded-xl bg-[#A20D38]/10 text-[#A20D38] flex items-center justify-center shrink-0">
-              <Building2 className="w-4 h-4" />
+        {/* Company Identity Display (Desktop) — Enlarged Company Name and ID */}
+        <div className="hidden md:flex items-center">
+          <div
+            onClick={() => navigate('/settings')}
+            className="group flex items-center gap-3.5 bg-white hover:bg-[#FFFDFC] border border-[#F0E1E1] hover:border-[#A20D38]/50 shadow-2xs hover:shadow-xs rounded-2xl px-5 py-2.5 transition-all duration-200 cursor-pointer select-none active:scale-[0.99]"
+            title={language === 'gu' ? 'કંપની સેટિંગ્સ જુઓ' : 'View Company Settings'}
+          >
+            {/* Building Icon Container */}
+            <div className="w-10 h-10 rounded-xl bg-[#FCEDEC] group-hover:bg-[#A20D38] border border-[#F0E1E1] group-hover:border-[#A20D38] text-[#A20D38] group-hover:text-white flex items-center justify-center shrink-0 shadow-2xs group-hover:scale-105 transition-all duration-200">
+              <Building2 className="w-5 h-5 transition-colors duration-200" />
             </div>
-            <div className="flex flex-col min-w-0">
-              <div className="flex items-center gap-2">
-                <span className="text-xs sm:text-sm font-bold text-[#30232A] truncate">
-                  {companyName || 'Vinchhi Bandhej'}
-                </span>
-                <span className="text-[10px] font-semibold bg-[#A20D38]/10 text-[#A20D38] px-2 py-0.5 rounded-full border border-[#A20D38]/20 shrink-0">
-                  {companyCode || 'COMP-0001'}
-                </span>
-                {isPrimaryAdmin && (
-                  <span className="text-[10px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200 inline-flex items-center gap-1 shrink-0">
-                    <ShieldCheck className="w-3 h-3 text-amber-600" />
-                    <span>{language === 'gu' ? 'મુખ્ય સંચાલક' : 'Primary Admin'}</span>
-                  </span>
-                )}
-              </div>
-              <span className="text-[10px] text-[#786773] truncate">
-                {language === 'gu' ? 'સક્રિય કંપની વર્કશોપ • સંપૂર્ણ ડેટા અલગતા' : 'Active Company Workshop • Isolated Data'}
+
+            {/* Enlarged Company Name and ID Only */}
+            <div className="flex items-center gap-3">
+              <span className="font-serif font-bold text-lg sm:text-xl text-[#30232A] group-hover:text-[#A20D38] tracking-tight truncate max-w-[340px] transition-colors duration-200">
+                {companyName || 'Vinchhi Bandhej'}
+              </span>
+              <span className="font-mono text-xs sm:text-sm font-bold bg-[#FCEDEC] text-[#A20D38] px-3 py-1 rounded-full border border-[#F0E1E1] group-hover:border-[#A20D38]/30 shrink-0 transition-colors duration-200">
+                {companyCode || 'COMP-0001'}
               </span>
             </div>
           </div>
