@@ -8,6 +8,7 @@ from app.models.material_ledger import MaterialLedgerEntry
 from app.models.material_transaction import MaterialTransaction
 from app.models.money_transaction import MoneyTransaction
 from app.models.payment_record import PaymentRecord
+from app.models.password_reset import PasswordResetOTP
 
 __all__ = [
     "User",
@@ -20,4 +21,5 @@ __all__ = [
     "MaterialTransaction",
     "MoneyTransaction",
     "PaymentRecord",
+    "PasswordResetOTP",
 ]

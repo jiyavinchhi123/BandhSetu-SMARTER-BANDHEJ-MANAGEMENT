@@ -67,8 +67,8 @@ export const Dashboard: React.FC = () => {
           <div className="w-16 h-0.5 bg-[#A20D38] my-2" />
           <p className="text-xs sm:text-sm text-[#786773] leading-relaxed pt-1">
             {language === 'gu'
-              ? 'કચ્છ અને સૌરાષ્ટ્રના ક્લસ્ટર્સમાં ૨૦૦-૫૦૦ કારીગર બહેનોનું સરળ અને આધુનિક સંચાલન.'
-              : 'Manage 200–500 home-based women artisans across Kutch and Saurashtra clusters.'}
+              ? '૨૦૦-૫૦૦ કારીગર બહેનોનું સરળ અને આધુનિક સંચાલન.'
+              : 'Manage 200–500 home-based women artisans'}
           </p>
         </div>
 

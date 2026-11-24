@@ -36,6 +36,13 @@ INDEX_DEFINITIONS = [
     # Audit Logs: Administrative tracking & security audit
     "CREATE INDEX IF NOT EXISTS idx_audit_logs_user_date ON audit_logs(user_id, created_at);",
     "CREATE INDEX IF NOT EXISTS idx_audit_logs_action_date ON audit_logs(action, created_at);",
+
+    # Users & Auth: Phone / Email login lookups
+    "CREATE INDEX IF NOT EXISTS idx_users_email_phone ON users(email, phone);",
+
+    # Password Reset OTP: Expiration & Verification lookup
+    "CREATE INDEX IF NOT EXISTS idx_otp_email_created ON password_reset_otps(email, created_at);",
+    "CREATE INDEX IF NOT EXISTS idx_otp_expires_used ON password_reset_otps(expires_at, is_used);",
 ]
 
 

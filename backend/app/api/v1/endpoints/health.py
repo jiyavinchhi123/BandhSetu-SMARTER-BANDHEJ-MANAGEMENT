@@ -3,6 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import text
 from app.database.session import get_db, engine, verify_database_integrity
 from app.core.config import settings
+from app.core.cache import cache
 from app.schemas.health import HealthResponse
 from app.services.backup_service import BackupService
 from app.utils.formatters import format_ist_datetime
@@ -52,6 +53,7 @@ def health_check(db: Session = Depends(get_db)):
             "timezone": settings.TIMEZONE,
             "currency": settings.DEFAULT_CURRENCY,
             "backup_monitoring": backup_status,
+            "cache_telemetry": cache.get_stats(),
             "docs_url": "/docs" if settings.DEBUG else None,
         }
     )
@@ -88,6 +90,7 @@ def detailed_db_diagnostics(db: Session = Depends(get_db)):
         "table_record_counts": table_stats,
         "backup_health": backup_health,
         "recent_backups": all_backups[:5],
+        "cache_telemetry": cache.get_stats(),
     }
 
 

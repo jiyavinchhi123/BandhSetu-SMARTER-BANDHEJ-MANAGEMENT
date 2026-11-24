@@ -414,7 +414,7 @@ export const WorkerProfile: React.FC = () => {
     }, 0);
   }, [payments]);
 
-  const netPayableBalance = Math.max(0, totalReceivedAmount - totalPaidAmount);
+  const netPayableBalance = totalReceivedAmount - totalPaidAmount;
 
   const handleOpenPaymentModal = () => {
     setPaymentAmount(netPayableBalance > 0 ? netPayableBalance : 0);
@@ -514,19 +514,46 @@ export const WorkerProfile: React.FC = () => {
           </div>
 
           {/* Stat 2: Total i.e. Earnings - Earlier Paid */}
-          <div className="p-4 rounded-xl bg-emerald-50/60 border border-emerald-200/80 flex items-center justify-between">
+          <div
+            className={`p-4 rounded-xl border flex items-center justify-between transition-colors ${
+              netPayableBalance < 0
+                ? 'bg-rose-50/70 border-rose-200'
+                : 'bg-emerald-50/60 border-emerald-200/80'
+            }`}
+          >
             <div>
-              <p className="text-[11px] font-bold text-emerald-900 uppercase tracking-wider">
+              <p
+                className={`text-[11px] font-bold uppercase tracking-wider ${
+                  netPayableBalance < 0 ? 'text-rose-900' : 'text-emerald-900'
+                }`}
+              >
                 {t('payable_balance_card', 'Payable Balance (Earnings − Earlier Paid)')}
               </p>
-              <p className="text-2xl font-bold text-emerald-950 mt-1 font-mono">
+              <p
+                className={`text-2xl font-bold mt-1 font-mono ${
+                  netPayableBalance < 0 ? 'text-rose-700' : 'text-emerald-950'
+                }`}
+              >
                 {formatINR(netPayableBalance)}
               </p>
-              <p className="text-[11px] text-emerald-700 mt-0.5">
+              <p
+                className={`text-[11px] mt-0.5 ${
+                  netPayableBalance < 0 ? 'text-rose-700 font-medium' : 'text-emerald-700'
+                }`}
+              >
                 {t('total_earned_label', 'Total Earned')} ({formatINR(totalReceivedAmount)}) − {t('earlier_paid_label', 'Earlier Paid')} ({formatINR(totalPaidAmount)})
+                {netPayableBalance < 0 && (
+                  <span className="ml-1.5 font-bold text-rose-800">
+                    ({language === 'gu' ? 'કારીગર પાસે એડવાન્સ જમા છે' : 'Advance with Artisan'})
+                  </span>
+                )}
               </p>
             </div>
-            <div className="w-11 h-11 rounded-xl bg-emerald-100 text-emerald-800 flex items-center justify-center">
+            <div
+              className={`w-11 h-11 rounded-xl flex items-center justify-center ${
+                netPayableBalance < 0 ? 'bg-rose-100 text-rose-800' : 'bg-emerald-100 text-emerald-800'
+              }`}
+            >
               <IndianRupee className="w-6 h-6" />
             </div>
           </div>

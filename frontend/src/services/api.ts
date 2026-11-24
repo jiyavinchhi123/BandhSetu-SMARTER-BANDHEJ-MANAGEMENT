@@ -70,6 +70,47 @@ export interface AuditLogItem {
   created_at: string;
 }
 
+export interface ForgotPasswordRequestOTPResponse {
+  message: string;
+  channel: 'email' | 'sms';
+  cooldown_seconds: number;
+  masked_recipient?: string | null;
+  masked_phone?: string | null;
+  dev_otp?: string | null;
+}
+
+export interface ForgotPasswordVerifyOTPResponse {
+  message: string;
+  reset_token: string;
+}
+
+export interface ForgotPasswordResetPasswordResponse {
+  message: string;
+}
+
+export interface SMTPConfigResponse {
+  is_configured: boolean;
+  smtp_host: string;
+  smtp_port: number;
+  smtp_user?: string | null;
+  smtp_from_email?: string | null;
+  smtp_from_name: string;
+  smtp_tls: boolean;
+  masked_user?: string | null;
+  message: string;
+}
+
+export interface SMTPConfigPayload {
+  smtp_user: string;
+  smtp_password?: string;
+  smtp_from_email?: string;
+  smtp_from_name?: string;
+  smtp_host?: string;
+  smtp_port?: number;
+  smtp_tls?: boolean;
+  test_connection?: boolean;
+}
+
 // --- STEP 3: WORKER & ITEM INTERFACES ---
 export interface WorkerItem {
   id: number;
@@ -407,6 +448,72 @@ export class ApiClient {
       await this.handleResponseError(response, 'Failed to update credentials');
     }
     return await response.json();
+  }
+
+  // Forgot Password - Email & Mobile OTP Verification (100% Free Lifetime Delivery)
+  async requestPasswordResetOTP(identifier: string, channel: 'email' | 'sms' = 'email'): Promise<ForgotPasswordRequestOTPResponse> {
+    const response = await fetch(`${this.baseUrl}/auth/forgot-password/request-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, phone: identifier, channel }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const errorMsg = data.detail?.message || data.detail || 'Failed to request OTP';
+      throw new Error(errorMsg);
+    }
+    return data as ForgotPasswordRequestOTPResponse;
+  }
+
+  async verifyPasswordResetOTP(identifier: string, otp: string): Promise<ForgotPasswordVerifyOTPResponse> {
+    const response = await fetch(`${this.baseUrl}/auth/forgot-password/verify-otp`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, phone: identifier, otp }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const errorMsg = data.detail?.message || data.detail || 'OTP verification failed';
+      throw new Error(errorMsg);
+    }
+    return data as ForgotPasswordVerifyOTPResponse;
+  }
+
+  async resetPasswordWithOTP(identifier: string, resetToken: string, newPassword: string): Promise<ForgotPasswordResetPasswordResponse> {
+    const response = await fetch(`${this.baseUrl}/auth/forgot-password/reset-password`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ identifier, phone: identifier, reset_token: resetToken, new_password: newPassword }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      const errorMsg = data.detail?.message || data.detail || 'Failed to reset password';
+      throw new Error(errorMsg);
+    }
+    return data as ForgotPasswordResetPasswordResponse;
+  }
+
+  // SMTP Email Configuration (100% Free Lifetime Email OTP Delivery)
+  async getSMTPConfig(): Promise<SMTPConfigResponse> {
+    const response = await fetch(`${this.baseUrl}/auth/smtp-config`);
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail?.message || data.detail || 'Failed to fetch SMTP configuration');
+    }
+    return data as SMTPConfigResponse;
+  }
+
+  async saveSMTPConfig(payload: SMTPConfigPayload): Promise<SMTPConfigResponse> {
+    const response = await fetch(`${this.baseUrl}/auth/smtp-config`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.detail?.message || data.detail || 'Failed to verify & save SMTP configuration');
+    }
+    return data as SMTPConfigResponse;
   }
 
   // Admin - Manager Controls

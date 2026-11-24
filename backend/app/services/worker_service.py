@@ -214,7 +214,7 @@ class WorkerService:
         # Update worker payable balance
         current_bal = float(worker.payable_balance)
         if data.payment_type in ("Wage Payout", "Advance Given"):
-            worker.payable_balance = max(0.0, current_bal - data.amount)
+            worker.payable_balance = round(current_bal - data.amount, 2)
         elif data.payment_type == "Bonus":
             worker.payable_balance = current_bal + data.amount
             worker.total_earned = float(worker.total_earned) + data.amount

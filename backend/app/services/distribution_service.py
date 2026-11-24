@@ -536,7 +536,7 @@ class DistributionService:
                 elif txn.credit_qty > 0 or txn.rejected_qty > 0:
                     total_pieces = txn.credit_qty + txn.rejected_qty
                     worker.pending_pieces += total_pieces
-                    worker.payable_balance = max(0.0, float(worker.payable_balance) - float(txn.total_value))
+                    worker.payable_balance = round(float(worker.payable_balance) - float(txn.total_value), 2)
                     worker.total_earned = max(0.0, float(worker.total_earned) - float(txn.total_value))
 
                     comp_txn = MaterialTransaction(

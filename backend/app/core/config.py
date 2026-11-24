@@ -71,6 +71,16 @@ class Settings(BaseSettings):
     DEFAULT_CURRENCY: str = "INR"
     TIMEZONE: str = "Asia/Kolkata"
 
+    # SMTP Email Configuration (100% Free Lifetime Email OTP Delivery)
+    SMTP_HOST: str = "smtp.gmail.com"
+    SMTP_PORT: int = 587
+    SMTP_USER: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM_EMAIL: Optional[str] = None
+    SMTP_FROM_NAME: str = "BandhSetu Security"
+    SMTP_TLS: bool = True
+    SMTP_SSL: bool = False
+
     # Default Manager Access Timings in IST (24-hour HH:MM format)
     DEFAULT_MANAGER_START_TIME: str = "09:00"  # 09:00 AM IST
     DEFAULT_MANAGER_END_TIME: str = "20:00"    # 08:00 PM IST

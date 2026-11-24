@@ -326,10 +326,19 @@ export const Workers: React.FC = () => {
                     </p>
                   </div>
                   <div className="pl-4">
-                    <p className="text-[11px] text-[#786773] font-medium">
-                      {t('payable_bal_label', 'Payable Balance')}
+                    <p className="text-[11px] text-[#786773] font-medium flex items-center justify-between">
+                      <span>{t('payable_bal_label', 'Payable Balance')}</span>
+                      {(worker.payable_balance || 0) < 0 && (
+                        <span className="text-[10px] font-bold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded">
+                          {language === 'gu' ? 'એડવાન્સ' : 'Advance'}
+                        </span>
+                      )}
                     </p>
-                    <p className="font-serif text-lg sm:text-xl font-bold text-[#A20D38] mt-0.5">
+                    <p
+                      className={`font-serif text-lg sm:text-xl font-bold mt-0.5 ${
+                        (worker.payable_balance || 0) < 0 ? 'text-rose-600' : 'text-[#A20D38]'
+                      }`}
+                    >
                       {formatINR(worker.payable_balance)}
                     </p>
                   </div>

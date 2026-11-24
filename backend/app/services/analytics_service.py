@@ -5,6 +5,8 @@ import csv
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, and_, or_
 
+from app.core.cache import cache
+
 from app.models.worker import Worker
 from app.models.item import Item
 from app.models.work_distribution import WorkDistribution
@@ -67,6 +69,11 @@ class AnalyticsService:
         10. Total Outstanding Payable
         Plus 7-day trend charts and recent activity log.
         """
+        cache_key = "dashboard:metrics"
+        cached_result = cache.get(cache_key)
+        if cached_result is not None:
+            return cached_result
+
         # 1 & 2. Artisan Worker counts
         total_registered = db.query(Worker).count()
         active_women = db.query(Worker).filter(Worker.status == "Active").count()
@@ -198,7 +205,7 @@ class AnalyticsService:
         recent_activity.sort(key=lambda x: x.date, reverse=True)
         recent_activity = recent_activity[:10]
 
-        return DashboardMetricsResponse(
+        response_obj = DashboardMetricsResponse(
             total_registered_women=total_registered,
             active_women=active_women,
             total_pieces_given=int(pieces_given),
@@ -212,6 +219,8 @@ class AnalyticsService:
             trends=trends,
             recent_activity=recent_activity,
         )
+        cache.set(cache_key, response_obj, ttl_seconds=60, tags=["dashboard"])
+        return response_obj
 
     @staticmethod
     def get_report_data(

@@ -9,7 +9,7 @@ interface AuthContextType {
   isLoading: boolean;
   isLockedOut: boolean;
   lockMessage: string | null;
-  login: (identifier: string, password: string) => Promise<void>;
+  login: (identifier: string, password: string) => Promise<LoginResponse>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateUserSession: (updatedUser: UserProfile, newToken?: string | null) => void;
@@ -153,6 +153,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Populate user profile
       await refreshUser();
+      return res;
     } catch (err: any) {
       if (err.code === 'ACCESS_HOURS_EXPIRED' || err.code === 'ACCOUNT_LOCKED') {
         setIsLockedOut(true);

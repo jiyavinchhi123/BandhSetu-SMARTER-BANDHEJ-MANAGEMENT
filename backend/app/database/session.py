@@ -55,6 +55,10 @@ if db_url.startswith("sqlite"):
                 cursor.execute("PRAGMA cache_size = -64000;")
                 # 6. Auto checkpoint every 1000 pages to keep WAL file compact
                 cursor.execute("PRAGMA wal_autocheckpoint = 1000;")
+                # 7. Memory-mapped I/O (256MB) for zero-copy file reads
+                cursor.execute("PRAGMA mmap_size = 268435456;")
+                # 8. Store temporary tables, indices, and sorts in RAM
+                cursor.execute("PRAGMA temp_store = MEMORY;")
             except Exception as e:
                 logger.warning(f"Could not apply SQLite performance pragmas: {e}")
             finally:
@@ -95,6 +99,11 @@ def atomic_transaction(db: Session):
         try:
             yield db
             db.commit()
+            try:
+                from app.core.cache import cache
+                cache.invalidate_by_tag("dashboard")
+            except Exception:
+                pass
         except Exception:
             db.rollback()
             raise

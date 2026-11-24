@@ -103,3 +103,73 @@ class AuditLogResponse(BaseModel):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+# =====================================================================
+# Forgot Password Mobile OTP Verification Schemas
+# =====================================================================
+
+class ForgotPasswordRequestOTP(BaseModel):
+    identifier: Optional[str] = Field(None, description="Registered email address or mobile number")
+    phone: Optional[str] = Field(None, description="Registered mobile number (backward compatibility)")
+    channel: Optional[str] = Field(default=None, description="Delivery channel: 'email' (100% free lifetime) or 'sms'")
+
+
+class ForgotPasswordRequestOTPResponse(BaseModel):
+    message: str
+    channel: str = "email"
+    cooldown_seconds: int = 60
+    masked_recipient: Optional[str] = None
+    masked_phone: Optional[str] = None
+    dev_otp: Optional[str] = None
+
+
+class ForgotPasswordVerifyOTP(BaseModel):
+    identifier: Optional[str] = None
+    phone: Optional[str] = None
+    otp: str = Field(..., min_length=4, max_length=10, description="6-digit verification code")
+
+
+class ForgotPasswordVerifyOTPResponse(BaseModel):
+    message: str
+    reset_token: str
+
+
+class ForgotPasswordResetPassword(BaseModel):
+    identifier: Optional[str] = None
+    phone: Optional[str] = None
+    reset_token: str = Field(..., min_length=16, description="Reset token from OTP verification")
+    new_password: str = Field(..., min_length=6, description="New secure password (min 6 characters)")
+
+
+class ForgotPasswordResetPasswordResponse(BaseModel):
+    message: str
+
+
+# =====================================================================
+# SMTP Email Delivery Configuration Schemas (100% Free Lifetime)
+# =====================================================================
+
+class SMTPConfigRequest(BaseModel):
+    smtp_user: str = Field(..., min_length=5, description="Gmail address e.g. jiya.vinchhi2412@gmail.com")
+    smtp_password: Optional[str] = Field(None, description="16-character Google App Password")
+    smtp_from_name: Optional[str] = Field(default="BandhSetu Security", description="Display name for sent emails")
+    smtp_from_email: Optional[str] = Field(None, description="From email address")
+    smtp_host: Optional[str] = Field(default="smtp.gmail.com", description="SMTP server host")
+    smtp_port: Optional[int] = Field(default=587, description="SMTP server port")
+    smtp_tls: Optional[bool] = Field(default=True, description="Enable STARTTLS encryption")
+    test_connection: Optional[bool] = Field(default=True, description="Verify credentials with SMTP server before saving")
+
+
+class SMTPConfigResponse(BaseModel):
+    is_configured: bool
+    smtp_host: str = "smtp.gmail.com"
+    smtp_port: int = 587
+    smtp_user: Optional[str] = None
+    smtp_from_email: Optional[str] = None
+    smtp_from_name: str = "BandhSetu Security"
+    smtp_tls: bool = True
+    masked_user: Optional[str] = None
+    message: str = "SMTP configuration updated successfully."
+
+

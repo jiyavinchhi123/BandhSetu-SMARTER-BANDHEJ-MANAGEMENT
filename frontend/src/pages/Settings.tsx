@@ -11,12 +11,16 @@ import {
   ShieldCheck,
   AlertCircle,
   CheckCircle2,
+  Settings as SettingsIcon,
+  Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 import { Card, Button, Input } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../hooks/useToast';
-import { api } from '../services/api';
+import { api, SMTPConfigResponse } from '../services/api';
+import { SMTPConfigModal } from '../components/auth/SMTPConfigModal';
 
 export const Settings: React.FC = () => {
   const { user, updateUserSession } = useAuth();
@@ -38,6 +42,10 @@ export const Settings: React.FC = () => {
   const [credentialError, setCredentialError] = useState<string | null>(null);
   const [credentialSuccess, setCredentialSuccess] = useState<string | null>(null);
 
+  // SMTP Settings State
+  const [showSmtpModal, setShowSmtpModal] = useState(false);
+  const [smtpStatus, setSmtpStatus] = useState<SMTPConfigResponse | null>(null);
+
   // Synchronize when user auth loads/updates
   useEffect(() => {
     if (user) {
@@ -45,6 +53,9 @@ export const Settings: React.FC = () => {
       setPhone(user.phone || '');
       setEmail(user.email || '');
     }
+
+    // Fetch SMTP status
+    api.getSMTPConfig().then(setSmtpStatus).catch(() => {});
   }, [user]);
 
   // Handle Login Credentials Update
@@ -351,6 +362,100 @@ export const Settings: React.FC = () => {
           </div>
         </form>
       </Card>
+
+      {/* GMAIL SMTP EMAIL DELIVERY CONFIGURATION CARD */}
+      <Card className="p-6 sm:p-8 border-[#F0E1E1] rounded-3xl shadow-2xs space-y-5 bg-white">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#F0E1E1] pb-4 gap-3">
+          <div className="flex items-center gap-3">
+            <div className="p-2.5 rounded-2xl bg-[#FCEDEC] text-[#A20D38]">
+              <Mail className="w-5 h-5" />
+            </div>
+            <div>
+              <h2 className="font-serif text-lg font-bold text-[#30232A]">
+                {language === 'gu'
+                  ? 'ઇમેઇલ OTP ડિલિવરી સેટિંગ્સ'
+                  : 'Email & OTP Delivery Settings'}
+              </h2>
+              <p className="text-xs text-slate-500">
+                {language === 'gu'
+                  ? '૧૦૦% ફ્રી લાઇફટાઇમ Google Gmail SMTP (પાસવર્ડ રીસેટ કોડ માટે)'
+                  : '100% Free Lifetime Gmail SMTP for password reset codes'}
+              </p>
+            </div>
+          </div>
+
+          <div>
+            {smtpStatus?.is_configured ? (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>Live Connected ({smtpStatus.masked_user})</span>
+              </span>
+            ) : (
+              <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-800 border border-amber-200">
+                <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                <span>Demo Mode (Local OTP)</span>
+              </span>
+            )}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 rounded-2xl bg-[#FFF9F6] border border-[#F0E1E1] text-xs">
+          <div>
+            <span className="text-slate-500 font-medium">Provider:</span>
+            <p className="font-bold text-[#30232A] mt-0.5">Google Gmail SMTP</p>
+          </div>
+          <div>
+            <span className="text-slate-500 font-medium">Host & Port:</span>
+            <p className="font-mono text-[#30232A] mt-0.5">smtp.gmail.com:587 (TLS)</p>
+          </div>
+          <div>
+            <span className="text-slate-500 font-medium">Cost / Charges:</span>
+            <p className="font-bold text-emerald-700 mt-0.5">₹0 (100% Free Lifetime)</p>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2">
+          <p className="text-xs text-[#786773] leading-relaxed max-w-xl">
+            {language === 'gu'
+              ? 'તમારા એકાઉન્ટ માટે Google App Passwords નો ઉપયોગ કરીને તમે તમારા ગ્રાહકો કે મેનેજરોને અસલી ઇમેઇલ મોકલી શકો છો.'
+              : 'Add or update your 16-character Google App Password to deliver actual verification codes to registered inboxes.'}
+          </p>
+
+          <Button
+            type="button"
+            variant="outline"
+            size="md"
+            icon={<SettingsIcon className="w-4 h-4 text-[#A20D38]" />}
+            onClick={() => setShowSmtpModal(true)}
+            className="shrink-0"
+          >
+            {smtpStatus?.is_configured
+              ? language === 'gu'
+                ? 'App Password બદલો'
+                : 'Change App Password'
+              : language === 'gu'
+              ? 'Gmail App Password ઉમેરો'
+              : 'Add Gmail App Password'}
+          </Button>
+        </div>
+      </Card>
+
+      {/* Reusable SMTP Configuration Modal */}
+      <SMTPConfigModal
+        isOpen={showSmtpModal}
+        onClose={() => setShowSmtpModal(false)}
+        onSaved={(cfg) => {
+          setSmtpStatus(cfg);
+          showToast({
+            type: 'success',
+            title: language === 'gu' ? 'SMTP અપડેટ થયું' : 'SMTP Configured',
+            message:
+              language === 'gu'
+                ? 'Gmail SMTP સફળતાપૂર્વક કનેક્ટ થયું! હવે અસલી ઇમેઇલ આવશે.'
+                : 'Gmail SMTP connected successfully! Real OTP emails are now enabled.',
+          });
+        }}
+      />
     </div>
   );
 };

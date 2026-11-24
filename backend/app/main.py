@@ -1,9 +1,12 @@
 import logging
+import time
+import uuid
 from datetime import date
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from starlette.middleware.gzip import GZipMiddleware
+from starlette.responses import JSONResponse, RedirectResponse
 from sqlalchemy import or_
 from app.core.config import settings
 from app.api.v1.api import api_router
@@ -152,6 +155,8 @@ async def lifespan(app: FastAPI):
     stop_backup_scheduler()
 
 
+
+
 app = FastAPI(
     title=settings.PROJECT_NAME,
     version=settings.VERSION,
@@ -161,6 +166,9 @@ app = FastAPI(
     redoc_url="/redoc" if settings.DEBUG else None,
     lifespan=lifespan
 )
+
+# GZip Compression Middleware (Compresses responses >= 500 bytes by up to 80%)
+app.add_middleware(GZipMiddleware, minimum_size=500)
 
 # CORS Middleware
 origins = [str(origin).rstrip("/") for origin in settings.BACKEND_CORS_ORIGINS]
@@ -172,6 +180,39 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.middleware("http")
+async def performance_and_fault_tolerance_middleware(request: Request, call_next):
+    """
+    Measures sub-millisecond execution latency, stamps distributed tracing Request-IDs,
+    and catches unhandled server exceptions to prevent container crashes and memory leaks.
+    """
+    request_id = str(uuid.uuid4())[:8]
+    start_time = time.perf_counter()
+    try:
+        response = await call_next(request)
+        process_time_ms = (time.perf_counter() - start_time) * 1000.0
+        response.headers["X-Process-Time"] = f"{process_time_ms:.2f}ms"
+        response.headers["X-Request-ID"] = request_id
+        return response
+    except Exception as exc:
+        process_time_ms = (time.perf_counter() - start_time) * 1000.0
+        logger.error(
+            f"[Req {request_id}] Unhandled error on {request.method} {request.url.path}: {exc}",
+            exc_info=True
+        )
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": "An internal server error occurred. Automatic recovery logged this event.",
+                "request_id": request_id,
+            },
+            headers={
+                "X-Process-Time": f"{process_time_ms:.2f}ms",
+                "X-Request-ID": request_id,
+            }
+        )
 
 # Include API v1 Router
 app.include_router(api_router, prefix=settings.API_V1_STR)
