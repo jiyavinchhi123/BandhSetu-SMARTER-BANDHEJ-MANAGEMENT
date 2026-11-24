@@ -954,14 +954,17 @@ class AnalyticsService:
             )
 
     @staticmethod
-    def export_report_csv(report_data: ReportResponse) -> str:
+    def export_report_csv(report_data: ReportResponse, company_name: Optional[str] = None) -> str:
         """
-        Renders the ReportResponse into CSV string format for Excel/CSV download.
+        Renders the ReportResponse into CSV string format for Excel/CSV download,
+        with company name prominently featured on top.
         """
         output = StringIO()
         writer = csv.writer(output)
 
-        writer.writerow([f"BANDHSETU — {report_data.report_title.upper()}"])
+        comp_header = (company_name or "BANDHSETU").upper()
+        writer.writerow([comp_header])
+        writer.writerow([f"Report: {report_data.report_title.upper()}"])
         writer.writerow(["Generated At", datetime.now().strftime("%d/%m/%Y %I:%M %p")])
         if report_data.start_date or report_data.end_date:
             writer.writerow(["Date Range", f"{report_data.start_date or 'Start'} to {report_data.end_date or 'Present'}"])
@@ -1047,15 +1050,28 @@ class AnalyticsService:
             query = query.filter(WorkDistribution.item_name_snapshot == item_name.strip())
 
         if q and q.strip():
-            term = f"%{q.strip().lower()}%"
-            query = query.filter(
-                or_(
-                    func.lower(Worker.full_name).like(term),
-                    func.lower(Worker.serial_number).like(term),
-                    func.lower(WorkDistribution.batch_code).like(term),
-                    func.lower(WorkDistribution.item_name_snapshot).like(term),
-                )
-            )
+            raw_q = q.strip()
+            term = f"%{raw_q.lower()}%"
+            conditions = [
+                func.lower(Worker.full_name).like(term),
+                func.lower(Worker.serial_number).like(term),
+                func.lower(WorkDistribution.batch_code).like(term),
+                func.lower(WorkDistribution.item_name_snapshot).like(term),
+            ]
+            if raw_q.isdigit():
+                num = int(raw_q)
+                conditions.extend([
+                    Worker.serial_number.ilike(f"%-{num}"),
+                    Worker.serial_number.ilike(f"%-{num:04d}"),
+                    Worker.serial_number == raw_q,
+                ])
+            else:
+                clean_term = raw_q.replace("-", "").replace(" ", "").lower()
+                if clean_term:
+                    conditions.append(
+                        func.replace(func.replace(func.lower(Worker.serial_number), "-", ""), " ", "").like(f"%{clean_term}%")
+                    )
+            query = query.filter(or_(*conditions))
 
         # Oldest issue date first
         distributions_db = query.order_by(WorkDistribution.issue_date.asc(), WorkDistribution.id.asc()).all()
@@ -1166,15 +1182,23 @@ class AnalyticsService:
 
     @staticmethod
     def export_pending_work_csv(
-        report_data: PendingWorkReportResponse
+        report_data: PendingWorkReportResponse,
+        company_name: Optional[str] = None
     ) -> str:
         output = StringIO()
         writer = csv.writer(output)
 
-        # ONLY Table Header
+        # Company Name prominently on top of Excel / CSV
+        comp_header = (company_name or "BANDHSETU").upper()
+        writer.writerow([comp_header])
+        writer.writerow(["ARTISAN PENDING WORK CONSIGNMENT REPORT"])
+        writer.writerow(["Generated At", datetime.now().strftime("%d/%m/%Y %I:%M %p")])
+        writer.writerow([])
+
+        # Table Header
         writer.writerow([
             "Date",
-            "Serial No.",
+            "Artisan ID",
             "Artisan Name",
             "Town",
             "Remaining Pcs",

@@ -142,6 +142,29 @@ def ensure_multi_tenant_schema(engine: Engine) -> int:
         except Exception:
             pass
 
+        # Migrate legacy WRK-XXXX serial numbers to company initials format: e.g. VB-1, PB-1
+        try:
+            import re
+            from app.services.worker_service import WorkerService
+            companies_res = conn.execute(text("SELECT id, name FROM companies;")).fetchall()
+            for comp_id, comp_name in companies_res:
+                prefix = WorkerService.compute_company_prefix(comp_name)
+                legacy_workers = conn.execute(
+                    text("SELECT id, serial_number FROM workers WHERE business_id = :cid AND serial_number LIKE 'WRK-%' ORDER BY id ASC;"),
+                    {"cid": comp_id}
+                ).fetchall()
+                for w_id, w_sn in legacy_workers:
+                    matches = re.findall(r"\d+", w_sn)
+                    num = int(matches[-1]) if matches else w_id
+                    new_sn = f"{prefix}-{num}"
+                    conn.execute(
+                        text("UPDATE workers SET serial_number = :new_sn WHERE id = :w_id;"),
+                        {"new_sn": new_sn, "w_id": w_id}
+                    )
+            conn.commit()
+        except Exception as we:
+            logger.debug(f"Worker serial number migration notice: {we}")
+
     return applied
 
 

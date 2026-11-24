@@ -284,3 +284,83 @@ def test_dashboard_metrics_multi_tenant_isolation(db_session):
     assert dash1.total_registered_women >= 2  # Simaben, Radhikaben, etc.
     assert dash2.total_registered_women >= 1  # Kajalben
     assert dash1.total_registered_women != dash2.total_registered_women
+
+
+def test_company_initials_worker_id_and_numeric_search(db_session):
+    """
+    Requirement:
+    1. Worker ID format: Company initials + '-' + number.
+       For 'Paradise Bandhani' -> PB-1, PB-2, etc.
+       For 'Vinchhi Bandhej' -> VB-1, VB-2, etc.
+    2. Searching: allows searching by bare numbers like 1, 2, 3 as well as PB-1 or name.
+    """
+    from app.services.worker_service import WorkerService
+
+    # 1. Verify prefix generation
+    assert WorkerService.compute_company_prefix("Paradise Bandhani") == "PB"
+    assert WorkerService.compute_company_prefix("Vinchhi Bandhej") == "VB"
+    assert WorkerService.compute_company_prefix("Shree Radhe Bandhej") == "SRB"
+
+    # 2. Register company "Paradise Bandhani" if not present
+    req = make_request()
+    pb_payload = CompanyRegisterRequest(
+        company_name="Paradise Bandhani",
+        legal_name="Paradise Bandhani LLP",
+        full_name="Pravinbhai Paradise",
+        email="pravin@paradisebandhani.com",
+        phone="+919825111111",
+        password="Password@123",
+        city="Jamnagar",
+        state="Gujarat"
+    )
+    pb_comp = db_session.query(Company).filter(Company.name == "Paradise Bandhani").first()
+    if not pb_comp:
+        reg_res = register_company(req=pb_payload, request=req, db=db_session)
+        pb_comp = db_session.query(Company).filter(Company.name == "Paradise Bandhani").first()
+
+    pb_admin = db_session.query(User).filter(User.business_id == pb_comp.id, User.role == "admin").first()
+
+    # 3. Create first artisan for Paradise Bandhani -> must be PB-1!
+    existing_w = db_session.query(Worker).filter(Worker.business_id == pb_comp.id).first()
+    if not existing_w:
+        w1 = register_worker(
+            worker_in=WorkerCreate(
+                full_name="Geetaben Solanki",
+                phone="+919825122222",
+                town="Jamnagar",
+                status="Active"
+            ),
+            current_user=pb_admin,
+            db=db_session
+        )
+        assert w1.serial_number == "PB-1", f"Expected PB-1, got {w1.serial_number}"
+    else:
+        assert existing_w.serial_number.startswith("PB-")
+
+    # 4. Search by bare number '1' -> matches PB-1
+    res_1, total_1 = WorkerService.search_workers(db=db_session, q="1", business_id=pb_comp.id)
+    assert any(w.serial_number == "PB-1" for w in res_1)
+
+    # 5. Search for Company 1 (Vinchhi Bandhej) workers by '1' and '2'
+    res_vb1, _ = WorkerService.search_workers(db=db_session, q="1", business_id=1)
+    assert any(w.serial_number == "VB-1" for w in res_vb1)
+
+    res_vb2, _ = WorkerService.search_workers(db=db_session, q="2", business_id=1)
+    assert any(w.serial_number == "VB-2" for w in res_vb2)
+
+
+def test_excel_and_csv_export_has_company_name_on_top(db_session):
+    """
+    Requirement:
+    Excel and CSV / PDF exports must have the Company Name on top.
+    """
+    from app.services.analytics_service import AnalyticsService
+
+    # 1. Pending work report CSV export
+    report_data = AnalyticsService.get_pending_work_report(db=db_session, business_id=1)
+    csv_out = AnalyticsService.export_pending_work_csv(report_data, company_name="Paradise Bandhani")
+    lines = [l.strip() for l in csv_out.strip().split("\n") if l.strip()]
+
+    # First row must be the company name on top!
+    assert "PARADISE BANDHANI" in lines[0].upper()
+    assert "ARTISAN PENDING WORK" in lines[1].upper()

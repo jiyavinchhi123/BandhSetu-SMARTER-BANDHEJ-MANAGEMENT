@@ -110,7 +110,11 @@ def export_report_csv(
         search_query=search_query,
         business_id=biz_id,
     )
-    csv_content = AnalyticsService.export_report_csv(report_data)
+    from app.models.company import Company
+    company = db.query(Company).filter(Company.id == biz_id).first()
+    comp_name = company.name if company else "BandhSetu"
+
+    csv_content = AnalyticsService.export_report_csv(report_data, company_name=comp_name)
     today_str = date.today().strftime("%Y%m%d")
     filename = f"bandhsetu_{report_type}_{today_str}.csv"
 
@@ -176,7 +180,11 @@ def export_pending_work_csv(
         item_name=item_name,
         business_id=biz_id,
     )
-    csv_content = AnalyticsService.export_pending_work_csv(report_data)
+    from app.models.company import Company
+    company = db.query(Company).filter(Company.id == biz_id).first()
+    comp_name = company.name if company else "BandhSetu"
+
+    csv_content = AnalyticsService.export_pending_work_csv(report_data, company_name=comp_name)
     today_str = date.today().strftime("%Y%m%d")
     filename = f"bandhsetu_pending_work_{today_str}.csv"
 

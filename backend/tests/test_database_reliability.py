@@ -121,13 +121,13 @@ def test_production_data_preservation():
     db = SessionLocal()
     try:
         # 1. Simaben
-        simaben = db.query(Worker).filter(Worker.serial_number == "WRK-0001").first()
+        simaben = db.query(Worker).filter(Worker.serial_number.in_(["VB-1", "WRK-0001"])).first()
         assert simaben is not None
         assert simaben.full_name == "Simaben"
         assert simaben.town == "Anjar"
 
         # 2. Radhikaben
-        radhikaben = db.query(Worker).filter(Worker.serial_number == "WRK-0002").first()
+        radhikaben = db.query(Worker).filter(Worker.serial_number.in_(["VB-2", "WRK-0002"])).first()
         assert radhikaben is not None
         assert radhikaben.full_name == "Radhikaben"
         assert radhikaben.town in ("Lalpur", "Lajpur")

@@ -21,12 +21,43 @@ from app.schemas.worker import (
 
 class WorkerService:
     @staticmethod
-    def generate_next_serial_number(db: Session) -> str:
+    def compute_company_prefix(company_name: str) -> str:
         """
-        Generates the next sequential unique serial number in format WRK-XXXX.
+        Computes uppercase company initials for worker ID prefix.
+        e.g. 'Paradise Bandhani' -> 'PB' (Worker IDs: PB-1, PB-2, etc.)
+        e.g. 'Vinchhi Bandhej' -> 'VB' (Worker IDs: VB-1, VB-2, etc.)
+        e.g. 'Shree Radhe Bandhej' -> 'SRB' (Worker IDs: SRB-1, etc.)
+        e.g. 'Bandhani' -> 'BA'
+        """
+        if not company_name:
+            return "WRK"
+        words = [w for w in re.split(r"[^A-Za-z0-9]+", company_name.strip()) if w]
+        if not words:
+            return "WRK"
+        if len(words) >= 2:
+            return "".join(w[0].upper() for w in words)
+        if len(words[0]) >= 2:
+            return words[0][:2].upper()
+        return words[0].upper()
+
+    @classmethod
+    def get_company_prefix(cls, db: Session, business_id: int = 1) -> str:
+        from app.models.company import Company
+        company = db.query(Company).filter(Company.id == business_id).first()
+        if not company or not company.name:
+            return "WRK"
+        return cls.compute_company_prefix(company.name)
+
+    @classmethod
+    def generate_next_serial_number(cls, db: Session, business_id: int = 1) -> str:
+        """
+        Generates the next sequential unique serial number in format company initials + '-' + number.
+        e.g. For 'Paradise Bandhani' -> PB-1, PB-2, PB-3...
+        e.g. For 'Vinchhi Bandhej' -> VB-1, VB-2, VB-3...
         Guaranteed to never reuse past serial numbers.
         """
-        workers = db.query(Worker.serial_number).all()
+        prefix = cls.get_company_prefix(db, business_id)
+        workers = db.query(Worker.serial_number).filter(Worker.business_id == business_id).all()
         max_num = 0
 
         for (sn,) in workers:
@@ -39,7 +70,7 @@ class WorkerService:
                         max_num = num
 
         next_num = max_num + 1
-        return f"WRK-{next_num:04d}"
+        return f"{prefix}-{next_num}"
 
     @staticmethod
     def search_workers(
@@ -54,25 +85,44 @@ class WorkerService:
     ) -> Tuple[List[Worker], int]:
         """
         Dynamic search with partial matching on Serial Number, Full Name,
-        Mobile Number, Town, City, and Village. Scoped strictly by business_id.
+        Mobile Number, Town, City, and Village.
+        Specifically supports searching by bare numbers like 1, 2, 3 to match PB-1, VB-1, etc.
+        Scoped strictly by business_id.
         """
         query = db.query(Worker)
         if business_id is not None:
             query = query.filter(Worker.business_id == business_id)
 
         if q and isinstance(q, str) and q.strip():
-            term = f"%{q.strip().lower()}%"
-            query = query.filter(
-                or_(
-                    func.lower(Worker.serial_number).like(term),
-                    func.lower(Worker.full_name).like(term),
-                    Worker.phone.like(term),
-                    func.lower(Worker.town).like(term),
-                    func.lower(Worker.address).like(term),
-                    func.lower(Worker.city).like(term),
-                    func.lower(Worker.village).like(term),
-                )
-            )
+            raw_q = q.strip()
+            term = f"%{raw_q.lower()}%"
+            conditions = [
+                func.lower(Worker.serial_number).like(term),
+                func.lower(Worker.full_name).like(term),
+                Worker.phone.like(term),
+                func.lower(Worker.town).like(term),
+                func.lower(Worker.address).like(term),
+                func.lower(Worker.city).like(term),
+                func.lower(Worker.village).like(term),
+            ]
+
+            # Allow direct numeric ID searching: typing "1", "2", "3" matches "PB-1", "VB-1", "WRK-0001", etc.
+            if raw_q.isdigit():
+                num = int(raw_q)
+                conditions.extend([
+                    Worker.serial_number.ilike(f"%-{num}"),
+                    Worker.serial_number.ilike(f"%-{num:04d}"),
+                    Worker.serial_number == raw_q,
+                ])
+            else:
+                # Also support typing without hyphen (e.g. "pb1" matches "PB-1")
+                clean_term = raw_q.replace("-", "").replace(" ", "").lower()
+                if clean_term:
+                    conditions.append(
+                        func.replace(func.replace(func.lower(Worker.serial_number), "-", ""), " ", "").like(f"%{clean_term}%")
+                    )
+
+            query = query.filter(or_(*conditions))
 
         # Handle string or FastAPI Query object gracefully
         status_val = status_filter if isinstance(status_filter, str) else getattr(status_filter, "default", None)
@@ -94,7 +144,7 @@ class WorkerService:
     @classmethod
     def create_worker(cls, db: Session, data: WorkerCreate, business_id: int = 1) -> Worker:
         """Registers a new woman artisan with a guaranteed unique serial number for the business."""
-        serial_num = cls.generate_next_serial_number(db)
+        serial_num = cls.generate_next_serial_number(db, business_id=business_id)
 
         worker = Worker(
             business_id=business_id,

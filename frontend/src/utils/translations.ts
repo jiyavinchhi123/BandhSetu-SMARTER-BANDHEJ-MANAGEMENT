@@ -384,8 +384,8 @@ export const translations: Translations = {
 
   // Workers
   search_workers_placeholder: {
-    en: "Search by Full Name (type 'R'), Serial Number (WRK-0001), Mobile, Town...",
-    gu: 'કારીગરનું પૂરું નામ, સીરીયલ નંબર (WRK-0001), મોબાઈલ અથવા ગામથી શોધો...',
+    en: "Search by Full Name, Artisan ID (1, 2, PB-1), Mobile, Town...",
+    gu: 'કારીગરનું પૂરું નામ, આઈડી (1, 2, PB-1), મોબાઈલ અથવા ગામથી શોધો...',
   },
   showing: {
     en: 'Showing',
@@ -888,8 +888,8 @@ export const translations: Translations = {
     gu: 'કારીગર / સીરીયલ / બેચ',
   },
   search_report_placeholder: {
-    en: 'e.g. Simaben, WRK-0001...',
-    gu: 'દા.ત. સીમાબેન, WRK-0001...',
+    en: 'e.g. Simaben, 1, PB-1...',
+    gu: 'દા.ત. સીમાબેન, 1, PB-1...',
   },
   filter_by_town: {
     en: 'Filter by Town',

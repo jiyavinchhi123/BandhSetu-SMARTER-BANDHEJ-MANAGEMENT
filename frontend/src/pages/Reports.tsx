@@ -29,6 +29,7 @@ import {
 import { formatIndianDate } from '../utils/formatters';
 import { useToast } from '../context/ToastContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useAuth } from '../context/AuthContext';
 import { translateEntityName } from '../utils/translations';
 
 type DatePreset = 'this_month' | 'prev_month' | 'last_30_days' | 'all_time' | 'custom';
@@ -38,6 +39,7 @@ type SortField = 'date_asc' | 'date_desc' | 'pending_desc' | 'name_asc';
 export const Reports: React.FC = () => {
   const { showToast } = useToast();
   const { t, language } = useLanguage();
+  const { companyName } = useAuth();
 
   // Search & Filter State
   const [datePreset, setDatePreset] = useState<DatePreset>('this_month');
@@ -160,12 +162,17 @@ export const Reports: React.FC = () => {
     window.print();
   };
 
-  // Client-side CSV generator fallback (contains ONLY the 6 columns and rows)
+  // Client-side CSV generator fallback with Company Name on top
   const generateClientCsv = (data: PendingWorkReportResponse) => {
+    const compHeader = (companyName || 'BANDHSETU').toUpperCase();
     const rows = [
+      [`"${compHeader}"`],
+      ['"ARTISAN PENDING WORK CONSIGNMENT REPORT"'],
+      [`"Generated: ${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString('en-IN')}"`],
+      [],
       [
         'Date',
-        'Serial No.',
+        'Artisan ID',
         'Artisan Name',
         'Town',
         'Remaining Pcs',
@@ -241,6 +248,48 @@ export const Reports: React.FC = () => {
 
   return (
     <div className="space-y-6 pb-20 md:pb-6 print:p-0 print:m-0 print:space-y-4">
+      {/* ------------------------------------------------------------- */}
+      {/* 0. PRINT / PDF HEADER — COMPANY NAME PROMINENTLY ON TOP       */}
+      {/* ------------------------------------------------------------- */}
+      <div className="hidden print:block mb-6 border-b-2 border-[#A20D38] pb-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-2xl font-bold font-serif text-[#A20D38] uppercase tracking-wide">
+              {companyName || 'BandhSetu'}
+            </h1>
+            <p className="text-sm font-semibold text-[#30232A] mt-1">
+              {t('pending_work_report', 'Pending Work Consignment Report')}
+            </p>
+          </div>
+          <div className="text-right text-xs text-[#786773]">
+            <p className="font-medium">Date: {new Date().toLocaleDateString('en-IN')}</p>
+            <p className="font-medium">Time: {new Date().toLocaleTimeString('en-IN')}</p>
+            <p className="text-[10px] text-gray-500 mt-1">BandhSetu • Smarter Bandhej Management</p>
+          </div>
+        </div>
+
+        {summary && (
+          <div className="grid grid-cols-4 gap-4 mt-4 pt-3 border-t border-gray-200 text-xs">
+            <div>
+              <span className="text-gray-500 font-medium">Remaining Pieces:</span>{' '}
+              <span className="font-bold text-[#A20D38] text-sm">{summary.total_pieces_pending}</span>
+            </div>
+            <div>
+              <span className="text-gray-500 font-medium">Pieces Issued:</span>{' '}
+              <span className="font-bold text-slate-800 text-sm">{summary.total_pieces_given}</span>
+            </div>
+            <div>
+              <span className="text-gray-500 font-medium">Artisans with Pending Work:</span>{' '}
+              <span className="font-bold text-slate-800 text-sm">{summary.total_artisans_with_pending}</span>
+            </div>
+            <div>
+              <span className="text-gray-500 font-medium">Active Date Filter:</span>{' '}
+              <span className="font-bold text-slate-800 capitalize">{datePreset.replace('_', ' ')}</span>
+            </div>
+          </div>
+        )}
+      </div>
+
       {/* ------------------------------------------------------------- */}
       {/* 1. REPORT HEADER */}
       {/* ------------------------------------------------------------- */}
@@ -362,7 +411,7 @@ export const Reports: React.FC = () => {
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder={t('search_report_placeholder', 'e.g. Simaben, WRK-0001...')}
+                placeholder={t('search_report_placeholder', 'e.g. Simaben, 1, PB-1...')}
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-8 pr-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-brand-500/20 focus:border-brand-500 text-slate-800"

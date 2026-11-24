@@ -208,13 +208,18 @@ def download_statement_csv(
 
     summary = PaymentService.get_money_ledger_summary(db=db, worker_id=worker_id)
 
+    from app.models.company import Company
+    company = db.query(Company).filter(Company.id == biz_id).first()
+    comp_header = (company.name if company else "BANDHSETU").upper()
+
     output = StringIO()
     writer = csv.writer(output)
 
-    # Header section
-    writer.writerow(["BANDHSETU ARTISAN FINANCIAL STATEMENT"])
+    # Header section with Company Name on top
+    writer.writerow([comp_header])
+    writer.writerow(["ARTISAN FINANCIAL STATEMENT"])
     writer.writerow(["Worker Name", summary.worker_name])
-    writer.writerow(["Serial Number", summary.worker_serial])
+    writer.writerow(["Artisan ID", summary.worker_serial])
     writer.writerow(["Statement Date", date.today().strftime("%d/%m/%Y")])
     writer.writerow([])
 
