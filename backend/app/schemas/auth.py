@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field, ConfigDict
 
 
 class LoginRequest(BaseModel):
+    company_name: Optional[str] = Field(default=None, description="Company / Business Name", json_schema_extra={"example": "Vinchhi Bandhej"})
     identifier: str = Field(..., description="Email address or Mobile Number", json_schema_extra={"example": "admin@bandhej.com"})
     password: str = Field(..., min_length=4, json_schema_extra={"example": "Admin@123"})
 
@@ -16,6 +17,10 @@ class TokenResponse(BaseModel):
     full_name: str
     email: str
     phone: Optional[str] = None
+    business_id: int = 1
+    company_name: str = "Vinchhi Bandhej"
+    company_code: str = "COMP-0001"
+    is_primary_admin: bool = False
     access_start_time: Optional[str] = "09:00"
     access_end_time: Optional[str] = "20:00"
     is_extended: bool = False
@@ -23,8 +28,54 @@ class TokenResponse(BaseModel):
     server_time_ist: str
 
 
+class CompanyRegisterRequest(BaseModel):
+    company_name: str = Field(..., min_length=2, description="Registered Company Name", json_schema_extra={"example": "Shree Radhe Bandhej"})
+    legal_name: Optional[str] = Field(default=None, description="Legal Business Name")
+    full_name: str = Field(..., min_length=2, description="Primary Admin Full Name", json_schema_extra={"example": "Rameshbhai Patel"})
+    email: str = Field(..., min_length=5, description="Primary Admin Email", json_schema_extra={"example": "ramesh@radhebandhej.com"})
+    phone: str = Field(..., min_length=8, description="Primary Admin Phone", json_schema_extra={"example": "+919825099999"})
+    password: str = Field(..., min_length=6, description="Admin Password")
+    city: Optional[str] = Field(default="Jamnagar")
+    state: Optional[str] = Field(default="Gujarat")
+
+
+class AdminCreateRequest(BaseModel):
+    email: str = Field(..., min_length=5, description="New Admin email address")
+    phone: Optional[str] = None
+    full_name: str = Field(..., min_length=2)
+    password: str = Field(..., min_length=6)
+
+
+class CompanyResponse(BaseModel):
+    id: int
+    code: str
+    name: str
+    legal_name: Optional[str] = None
+    owner_admin_id: Optional[int] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    status: str = "Active"
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class CompanyUpdateRequest(BaseModel):
+    legal_name: Optional[str] = None
+    address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+
+
 class UserResponse(BaseModel):
     id: int
+    business_id: int = 1
+    is_primary_admin: bool = False
+    authorized_by_id: Optional[int] = None
     email: str
     phone: Optional[str] = None
     full_name: str

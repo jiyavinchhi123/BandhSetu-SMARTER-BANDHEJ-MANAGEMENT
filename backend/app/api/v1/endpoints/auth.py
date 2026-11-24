@@ -5,16 +5,18 @@ import smtplib
 from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import or_, func
 from app.database.session import get_db
 from app.core.security import verify_password, hash_password, create_access_token
 from app.models.user import User
+from app.models.company import Company
 from app.models.password_reset import PasswordResetOTP
 from app.core.config import settings
 from app.schemas.auth import (
     LoginRequest,
     TokenResponse,
     UserResponse,
+    CompanyRegisterRequest,
     PasswordResetRequest,
     ProfileUpdateRequest,
     ProfileUpdateResponse,
@@ -38,7 +40,7 @@ from app.core.rate_limiter import rate_limit
 router = APIRouter()
 
 
-@router.post("/login", response_model=TokenResponse, summary="User & Manager Login (Email or Phone)")
+@router.post("/login", response_model=TokenResponse, summary="User & Manager Login (Company, Email or Phone)")
 def login(
     req: LoginRequest,
     request: Request,
@@ -46,12 +48,28 @@ def login(
     _rate_check: bool = Depends(rate_limit(max_requests=10, window_seconds=60)),
 ):
     """
-    Authenticates Admin or Manager using email address or mobile number.
+    Authenticates Admin or Manager using company name, email address or mobile number, and password.
     Server-side enforces Manager operating window and manual lock status.
     """
     identifier = req.identifier.strip()
     client_ip = request.client.host if request.client else "unknown"
     user_agent = request.headers.get("user-agent", "unknown")
+
+    # If company_name provided, resolve company first
+    company = None
+    if req.company_name and req.company_name.strip():
+        comp_name = req.company_name.strip()
+        company = db.query(Company).filter(
+            or_(
+                func.lower(Company.name) == func.lower(comp_name),
+                func.lower(Company.code) == func.lower(comp_name)
+            )
+        ).first()
+        if not company:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail=f"Company '{comp_name}' was not found. Please verify the company name or create your company."
+            )
 
     # Normalize identifier for phone lookup (support with/without spaces, +91, dashes)
     clean_phone = identifier.replace(" ", "").replace("-", "")
@@ -67,12 +85,16 @@ def login(
             phone_variants.add(digits_only[2:])
 
     # Find user by email OR phone variants
-    user = db.query(User).filter(
+    user_query = db.query(User).filter(
         or_(
             User.email.ilike(identifier),
             User.phone.in_(list(phone_variants))
         )
-    ).first()
+    )
+    if company:
+        user_query = user_query.filter(User.business_id == company.id)
+
+    user = user_query.first()
 
     if not user or not verify_password(req.password, user.hashed_password):
         access_control_service.log_audit(
@@ -81,12 +103,16 @@ def login(
             user_email=identifier,
             ip_address=client_ip,
             user_agent=user_agent,
-            details="Invalid username, phone number, or password"
+            details="Invalid username, company, phone number, or password"
         )
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials. Please verify your email/phone and password."
+            detail="Invalid credentials. Please verify your company name, email/phone, and password."
         )
+
+    # If company wasn't resolved by input, resolve user's assigned company
+    if not company:
+        company = db.query(Company).filter(Company.id == (user.business_id or 1)).first()
 
     # For managers, enforce approval status, operating hours, and lock status immediately on login attempt!
     if user.is_manager():
@@ -154,7 +180,7 @@ def login(
         user_role=user.role,
         ip_address=client_ip,
         user_agent=user_agent,
-        details=f"Successful authentication via {identifier}"
+        details=f"Successful authentication via {identifier} for company {company.name if company else 'Default'}"
     )
 
     # Create JWT
@@ -162,6 +188,10 @@ def login(
         "sub": str(user.id),
         "email": user.email,
         "role": user.role,
+        "business_id": user.business_id or (company.id if company else 1),
+        "company_name": company.name if company else "Vinchhi Bandhej",
+        "company_code": company.code if company else "COMP-0001",
+        "is_primary_admin": bool(user.is_primary_admin),
         "token_version": user.token_version,
     }
     token = create_access_token(token_payload)
@@ -180,12 +210,150 @@ def login(
         full_name=user.full_name,
         email=user.email,
         phone=user.phone,
+        business_id=user.business_id or (company.id if company else 1),
+        company_name=company.name if company else "Vinchhi Bandhej",
+        company_code=company.code if company else "COMP-0001",
+        is_primary_admin=bool(user.is_primary_admin),
         access_start_time=user.access_start_time,
         access_end_time=user.access_end_time,
         is_extended=is_ext,
         extension_until=ext_str,
         server_time_ist=format_ist_datetime()
     )
+
+
+@router.post("/register-company", response_model=TokenResponse, status_code=status.HTTP_201_CREATED, summary="Create Company & Primary Admin")
+def register_company(
+    req: CompanyRegisterRequest,
+    request: Request,
+    db: Session = Depends(get_db),
+    _rate_check: bool = Depends(rate_limit(max_requests=10, window_seconds=60)),
+):
+    """
+    Creates a new company and designates the creator as Primary Admin.
+    Generates unique COMP-XXXX ID.
+    Enforces that company registration happens only once per business.
+    Returns access token directly logging in the Primary Admin.
+    """
+    client_ip = request.client.host if request.client else "unknown"
+    clean_company_name = req.company_name.strip()
+    clean_email = req.email.strip().lower()
+
+    # Normalize phone
+    raw_phone = req.phone.strip()
+    digits = "".join(ch for ch in raw_phone if ch.isdigit())
+    clean_phone = f"+91{digits}" if len(digits) == 10 else raw_phone
+
+    # 1. Company name uniqueness check (case-insensitive)
+    existing_comp = db.query(Company).filter(
+        func.lower(Company.name) == func.lower(clean_company_name)
+    ).first()
+    if existing_comp:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"A company with the name '{clean_company_name}' already exists. Please choose a different name or log in."
+        )
+
+    # 2. Check if admin email already registered
+    existing_user = db.query(User).filter(User.email.ilike(clean_email)).first()
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"An account with email '{clean_email}' already exists. Please log in or use a different email."
+        )
+
+    # 3. Generate unique Company Code: COMP-XXXX
+    last_comp = db.query(Company).order_by(Company.id.desc()).first()
+    next_id = (last_comp.id + 1) if last_comp else 1
+    company_code = f"COMP-{next_id:04d}"
+
+    # 4. Create Company record
+    new_company = Company(
+        code=company_code,
+        name=clean_company_name,
+        legal_name=req.legal_name.strip() if req.legal_name else clean_company_name,
+        city=req.city or "Jamnagar",
+        state=req.state or "Gujarat",
+        phone=clean_phone,
+        email=clean_email,
+        status="Active",
+    )
+    db.add(new_company)
+    db.flush()
+
+    # 5. Create Primary Admin
+    primary_admin = User(
+        business_id=new_company.id,
+        is_primary_admin=True,
+        authorized_by_id=None,
+        email=clean_email,
+        phone=clean_phone,
+        full_name=req.full_name.strip(),
+        role="admin",
+        hashed_password=hash_password(req.password.strip()),
+        is_active=True,
+        is_locked=False,
+        access_start_time="00:00",
+        access_end_time="23:59",
+        token_version=1,
+    )
+    db.add(primary_admin)
+    db.flush()
+
+    new_company.owner_admin_id = primary_admin.id
+    db.commit()
+    db.refresh(primary_admin)
+    db.refresh(new_company)
+
+    # 6. Audit log
+    access_control_service.log_audit(
+        db=db,
+        action="COMPANY_REGISTERED",
+        user_id=primary_admin.id,
+        user_email=primary_admin.email,
+        user_role="admin",
+        ip_address=client_ip,
+        details=f"New company '{clean_company_name}' ({company_code}) created with Primary Admin {primary_admin.email}"
+    )
+
+    # 7. Generate JWT access token
+    token_payload = {
+        "sub": str(primary_admin.id),
+        "email": primary_admin.email,
+        "role": primary_admin.role,
+        "business_id": new_company.id,
+        "company_name": new_company.name,
+        "company_code": new_company.code,
+        "is_primary_admin": True,
+        "token_version": primary_admin.token_version,
+    }
+    token = create_access_token(token_payload)
+
+    return TokenResponse(
+        access_token=token,
+        token_type="bearer",
+        role=primary_admin.role,
+        user_id=primary_admin.id,
+        full_name=primary_admin.full_name,
+        email=primary_admin.email,
+        phone=primary_admin.phone,
+        business_id=new_company.id,
+        company_name=new_company.name,
+        company_code=new_company.code,
+        is_primary_admin=True,
+        access_start_time=primary_admin.access_start_time,
+        access_end_time=primary_admin.access_end_time,
+        is_extended=False,
+        extension_until=None,
+        server_time_ist=format_ist_datetime()
+    )
+
+
+@router.get("/companies", summary="List registered companies")
+def list_companies(db: Session = Depends(get_db)):
+    """Returns active company names and codes for suggestions."""
+    comps = db.query(Company).filter(Company.status == "Active").order_by(Company.name.asc()).all()
+    return [{"id": c.id, "name": c.name, "code": c.code} for c in comps]
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED, summary="Manager Self-Registration (Pending Admin Approval)")
@@ -230,6 +398,7 @@ def register_manager(
         )
 
     new_manager = User(
+        business_id=1,
         email=clean_email,
         phone=clean_phone,
         full_name=req.full_name.strip(),

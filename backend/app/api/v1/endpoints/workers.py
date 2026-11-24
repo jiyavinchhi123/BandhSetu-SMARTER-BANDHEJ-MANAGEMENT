@@ -18,7 +18,7 @@ from app.schemas.worker import (
     PaymentRecordResponse,
     TimelineTransactionItem,
 )
-from app.api.deps import get_current_user, require_manager_or_admin
+from app.api.deps import require_manager_or_admin
 from app.services.worker_service import worker_service
 
 router = APIRouter()
@@ -36,9 +36,9 @@ def get_workers(
     db: Session = Depends(get_db)
 ):
     """
-    Search 200–500 women artisans dynamically.
-    Typing 'R' partially matches 'Rekha', 'Ranjan', 'Rupal', etc.
+    Search 200–500 women artisans dynamically within the user's assigned business.
     """
+    biz_id = current_user.business_id or 1
     workers, total = worker_service.search_workers(
         db=db,
         q=q,
@@ -46,7 +46,8 @@ def get_workers(
         city_filter=city,
         village_filter=village,
         limit=limit,
-        offset=offset
+        offset=offset,
+        business_id=biz_id
     )
     return workers
 
@@ -60,9 +61,10 @@ def register_worker(
     """
     Admin and authorized Manager can register women artisans.
     Automatically assigns a guaranteed unique, non-reusable Serial Number (e.g. WRK-0001).
-    Does NOT create login accounts for workers.
+    Scoped to user's assigned company.
     """
-    return worker_service.create_worker(db, worker_in)
+    biz_id = current_user.business_id or 1
+    return worker_service.create_worker(db, worker_in, business_id=biz_id)
 
 
 @router.get("/{worker_id}", response_model=WorkerResponse, summary="Get full worker profile")
@@ -72,7 +74,8 @@ def get_worker_profile(
     db: Session = Depends(get_db)
 ):
     """Retrieves worker profile with pending quantities and payable balance reconciled from ledger."""
-    worker = db.query(Worker).filter(Worker.id == worker_id).first()
+    biz_id = current_user.business_id or 1
+    worker = db.query(Worker).filter(Worker.id == worker_id, Worker.business_id == biz_id).first()
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found.")
 
@@ -88,7 +91,8 @@ def get_worker_profile(
     pending_pcs = sum(int(d.quantity_pending or 0) for d in db.query(WorkDistribution).filter(WorkDistribution.worker_id == worker.id).all())
 
     worker.total_earned = round(total_earned, 2)
-    worker.payable_balance = round(max(0.0, total_earned - total_paid), 2)
+    # Allows negative payable balance when earlier paid exceeds total earned
+    worker.payable_balance = round(total_earned - total_paid, 2)
     worker.pending_pieces = pending_pcs
     db.commit()
     db.refresh(worker)
@@ -104,7 +108,8 @@ def update_worker_profile(
     db: Session = Depends(get_db)
 ):
     """Updates contact, location, status, or remarks."""
-    worker = db.query(Worker).filter(Worker.id == worker_id).first()
+    biz_id = current_user.business_id or 1
+    worker = db.query(Worker).filter(Worker.id == worker_id, Worker.business_id == biz_id).first()
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found.")
 
@@ -134,6 +139,10 @@ def get_material_ledger(
     db: Session = Depends(get_db)
 ):
     """Returns fabric lots and yarn issued vs. returned."""
+    biz_id = current_user.business_id or 1
+    worker = db.query(Worker).filter(Worker.id == worker_id, Worker.business_id == biz_id).first()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found.")
     return db.query(MaterialLedgerEntry).filter(
         MaterialLedgerEntry.worker_id == worker_id
     ).order_by(MaterialLedgerEntry.id.desc()).all()
@@ -147,6 +156,10 @@ def get_work_distribution(
     db: Session = Depends(get_db)
 ):
     """Returns active and past consignments with historical snapshot prices."""
+    biz_id = current_user.business_id or 1
+    worker = db.query(Worker).filter(Worker.id == worker_id, Worker.business_id == biz_id).first()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found.")
     return db.query(WorkDistribution).filter(
         WorkDistribution.worker_id == worker_id
     ).order_by(WorkDistribution.id.desc()).all()
@@ -163,6 +176,10 @@ def issue_work_consignment(
     Issues work to the worker. Automatically captures and permanently stores
     the current catalogue price as an immutable snapshot rate.
     """
+    biz_id = current_user.business_id or 1
+    worker = db.query(Worker).filter(Worker.id == worker_id, Worker.business_id == biz_id).first()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found.")
     return worker_service.distribute_work(db, worker_id, data)
 
 
@@ -174,6 +191,10 @@ def get_work_returns(
     db: Session = Depends(get_db)
 ):
     """Returns completed or partially returned batches."""
+    biz_id = current_user.business_id or 1
+    worker = db.query(Worker).filter(Worker.id == worker_id, Worker.business_id == biz_id).first()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found.")
     return db.query(WorkDistribution).filter(
         WorkDistribution.worker_id == worker_id,
         WorkDistribution.quantity_returned > 0
@@ -188,6 +209,10 @@ def get_earnings_ledger(
     db: Session = Depends(get_db)
 ):
     """Returns piece-rate earnings calculations per consignment."""
+    biz_id = current_user.business_id or 1
+    worker = db.query(Worker).filter(Worker.id == worker_id, Worker.business_id == biz_id).first()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found.")
     return db.query(WorkDistribution).filter(
         WorkDistribution.worker_id == worker_id
     ).order_by(WorkDistribution.id.desc()).all()
@@ -201,6 +226,10 @@ def get_payment_records(
     db: Session = Depends(get_db)
 ):
     """Returns wage disbursements and cash/UPI advances."""
+    biz_id = current_user.business_id or 1
+    worker = db.query(Worker).filter(Worker.id == worker_id, Worker.business_id == biz_id).first()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found.")
     return db.query(PaymentRecord).filter(
         PaymentRecord.worker_id == worker_id
     ).order_by(PaymentRecord.id.desc()).all()
@@ -214,6 +243,10 @@ def record_worker_payment(
     db: Session = Depends(get_db)
 ):
     """Disburses wage payout or records cash advance, adjusting payable balance."""
+    biz_id = current_user.business_id or 1
+    worker = db.query(Worker).filter(Worker.id == worker_id, Worker.business_id == biz_id).first()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found.")
     return worker_service.record_payment(db, worker_id, data, disbursed_by_name=current_user.full_name)
 
 
@@ -225,4 +258,8 @@ def get_complete_timeline(
     db: Session = Depends(get_db)
 ):
     """Returns unified chronological transaction log of work, returns, and payments."""
+    biz_id = current_user.business_id or 1
+    worker = db.query(Worker).filter(Worker.id == worker_id, Worker.business_id == biz_id).first()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found.")
     return worker_service.get_timeline(db, worker_id)

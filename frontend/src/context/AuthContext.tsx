@@ -1,15 +1,20 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { api, UserProfile, LoginResponse } from '../services/api';
+import { api, UserProfile, LoginResponse, CompanyRegisterPayload } from '../services/api';
 
 interface AuthContextType {
   user: UserProfile | null;
   token: string | null;
   role: 'admin' | 'manager' | null;
+  companyName: string;
+  companyCode: string;
+  businessId: number;
+  isPrimaryAdmin: boolean;
   isAuthenticated: boolean;
   isLoading: boolean;
   isLockedOut: boolean;
   lockMessage: string | null;
-  login: (identifier: string, password: string) => Promise<LoginResponse>;
+  login: (identifier: string, password: string, companyName?: string) => Promise<LoginResponse>;
+  registerCompany: (payload: CompanyRegisterPayload) => Promise<LoginResponse>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateUserSession: (updatedUser: UserProfile, newToken?: string | null) => void;
@@ -25,13 +30,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isLockedOut, setIsLockedOut] = useState<boolean>(false);
   const [lockMessage, setLockMessage] = useState<string | null>(null);
 
+  const [companyName, setCompanyName] = useState<string>(
+    () => localStorage.getItem('bandhej_company_name') || 'Vinchhi Bandhej'
+  );
+  const [companyCode, setCompanyCode] = useState<string>(
+    () => localStorage.getItem('bandhej_company_code') || 'COMP-0001'
+  );
+  const [businessId, setBusinessId] = useState<number>(
+    () => Number(localStorage.getItem('bandhej_business_id')) || 1
+  );
+  const [isPrimaryAdmin, setIsPrimaryAdmin] = useState<boolean>(
+    () => localStorage.getItem('bandhej_is_primary_admin') === 'true'
+  );
+
   const role = user?.role || (localStorage.getItem('bandhej_user_role') as 'admin' | 'manager' | null);
 
   const clearAuth = useCallback(() => {
     localStorage.removeItem('bandhej_auth_token');
     localStorage.removeItem('bandhej_user_role');
+    localStorage.removeItem('bandhej_company_name');
+    localStorage.removeItem('bandhej_company_code');
+    localStorage.removeItem('bandhej_business_id');
+    localStorage.removeItem('bandhej_is_primary_admin');
     setToken(null);
     setUser(null);
+    setCompanyName('Vinchhi Bandhej');
+    setCompanyCode('COMP-0001');
+    setBusinessId(1);
+    setIsPrimaryAdmin(false);
   }, []);
 
   const triggerLockout = useCallback((message: string) => {
@@ -50,6 +76,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     try {
       const profile = await api.getMe();
       setUser(profile);
+      if (profile.business_id) {
+        setBusinessId(profile.business_id);
+        localStorage.setItem('bandhej_business_id', String(profile.business_id));
+      }
+      if (profile.is_primary_admin !== undefined) {
+        setIsPrimaryAdmin(Boolean(profile.is_primary_admin));
+        localStorage.setItem('bandhej_is_primary_admin', String(profile.is_primary_admin));
+      }
       setIsLockedOut(false);
       setLockMessage(null);
     } catch (err: any) {
@@ -101,7 +135,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (!user || user.role !== 'manager' || !token) return;
 
     const checkInterval = setInterval(() => {
-      // Calculate current IST hours and minutes
       const now = new Date();
       const istString = now.toLocaleTimeString('en-US', {
         timeZone: 'Asia/Kolkata',
@@ -116,7 +149,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (user.temporary_extension_until) {
         const extTime = new Date(user.temporary_extension_until).getTime();
         if (now.getTime() <= extTime) {
-          return; // Still in temporary extension window
+          return;
         }
       }
 
@@ -136,17 +169,34 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           `Manager scheduled operating hours (${user.access_start_time} - ${user.access_end_time} IST) have ended. Access is closed until tomorrow 09:00 AM IST.`
         );
       }
-    }, 15000); // Check every 15s
+    }, 15000);
 
     return () => clearInterval(checkInterval);
   }, [user, token, triggerLockout]);
 
-  const login = async (identifier: string, password: string) => {
+  const login = async (identifier: string, password: string, compName?: string) => {
     setIsLoading(true);
     try {
-      const res: LoginResponse = await api.login(identifier, password);
+      const res: LoginResponse = await api.login(identifier, password, compName);
       localStorage.setItem('bandhej_auth_token', res.access_token);
       localStorage.setItem('bandhej_user_role', res.role);
+      if (res.company_name) {
+        localStorage.setItem('bandhej_company_name', res.company_name);
+        setCompanyName(res.company_name);
+      }
+      if (res.company_code) {
+        localStorage.setItem('bandhej_company_code', res.company_code);
+        setCompanyCode(res.company_code);
+      }
+      if (res.business_id) {
+        localStorage.setItem('bandhej_business_id', String(res.business_id));
+        setBusinessId(res.business_id);
+      }
+      if (res.is_primary_admin !== undefined) {
+        localStorage.setItem('bandhej_is_primary_admin', String(res.is_primary_admin));
+        setIsPrimaryAdmin(Boolean(res.is_primary_admin));
+      }
+
       setToken(res.access_token);
       setIsLockedOut(false);
       setLockMessage(null);
@@ -159,6 +209,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setIsLockedOut(true);
         setLockMessage(err.message || 'Access blocked by schedule or manual lock.');
       }
+      throw err;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const registerCompany = async (payload: CompanyRegisterPayload) => {
+    setIsLoading(true);
+    try {
+      const res: LoginResponse = await api.registerCompany(payload);
+      localStorage.setItem('bandhej_auth_token', res.access_token);
+      localStorage.setItem('bandhej_user_role', res.role);
+      if (res.company_name) {
+        localStorage.setItem('bandhej_company_name', res.company_name);
+        setCompanyName(res.company_name);
+      }
+      if (res.company_code) {
+        localStorage.setItem('bandhej_company_code', res.company_code);
+        setCompanyCode(res.company_code);
+      }
+      if (res.business_id) {
+        localStorage.setItem('bandhej_business_id', String(res.business_id));
+        setBusinessId(res.business_id);
+      }
+      if (res.is_primary_admin !== undefined) {
+        localStorage.setItem('bandhej_is_primary_admin', String(res.is_primary_admin));
+        setIsPrimaryAdmin(Boolean(res.is_primary_admin));
+      }
+
+      setToken(res.access_token);
+      setIsLockedOut(false);
+      setLockMessage(null);
+
+      await refreshUser();
+      return res;
+    } catch (err: any) {
       throw err;
     } finally {
       setIsLoading(false);
@@ -194,11 +280,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         user,
         token,
         role,
+        companyName,
+        companyCode,
+        businessId,
+        isPrimaryAdmin,
         isAuthenticated: Boolean(token && user),
         isLoading,
         isLockedOut,
         lockMessage,
         login,
+        registerCompany,
         logout,
         refreshUser,
         updateUserSession,
@@ -217,4 +308,3 @@ export const useAuth = () => {
   }
   return context;
 };
-

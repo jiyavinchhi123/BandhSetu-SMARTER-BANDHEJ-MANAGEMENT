@@ -8,6 +8,7 @@ class Worker(Base):
     __tablename__ = "workers"
 
     id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, default=1, nullable=False, index=True)
     serial_number = Column(String(50), unique=True, index=True, nullable=False)
     full_name = Column(String(255), index=True, nullable=False)
     phone = Column(String(30), index=True, nullable=False)

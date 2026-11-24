@@ -58,11 +58,13 @@ def give_work(
         return replay[1]
 
     try:
+        biz_id = current_user.business_id or 1
         result = DistributionService.give_work(
             db=db,
             data=data,
             user_id=current_user.id,
             user_name=current_user.full_name,
+            business_id=biz_id,
         )
         idempotency_engine.record_success(idem_key, 201, result)
         return result
@@ -109,11 +111,13 @@ def receive_work(
         return replay[1]
 
     try:
+        biz_id = current_user.business_id or 1
         result = DistributionService.receive_work(
             db=db,
             data=data,
             user_id=current_user.id,
             user_name=current_user.full_name,
+            business_id=biz_id,
         )
         idempotency_engine.record_success(idem_key, 201, result)
         return result
@@ -136,7 +140,8 @@ def get_pending_distributions(
     Returns distributions with pending quantities (> 0).
     Used to populate the return work dropdown/table.
     """
-    return DistributionService.get_pending_distributions(db=db, worker_id=worker_id)
+    biz_id = current_user.business_id or 1
+    return DistributionService.get_pending_distributions(db=db, worker_id=worker_id, business_id=biz_id)
 
 
 @router.get(
@@ -154,11 +159,13 @@ def get_all_distributions(
     """
     Lists work distributions with optional worker, status, and text search.
     """
+    biz_id = current_user.business_id or 1
     return DistributionService.get_all_distributions(
         db=db,
         worker_id=worker_id,
         status_filter=status_filter,
         search_query=q,
+        business_id=biz_id,
     )
 
 
@@ -179,6 +186,11 @@ def get_worker_material_ledger(
     - Item-wise pending quantities breakdown
     - Complete chronological transaction list
     """
+    from app.models.worker import Worker
+    biz_id = current_user.business_id or 1
+    worker = db.query(Worker).filter(Worker.id == worker_id, Worker.business_id == biz_id).first()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found in your company.")
     return DistributionService.get_material_ledger_summary(db=db, worker_id=worker_id)
 
 

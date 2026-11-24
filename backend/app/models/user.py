@@ -1,5 +1,6 @@
 from datetime import datetime
-from sqlalchemy import Column, Integer, String, Boolean, DateTime
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey
+from sqlalchemy.orm import relationship
 from app.database.session import Base
 
 
@@ -7,6 +8,11 @@ class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, index=True)
+    # Multi-tenant business association
+    business_id = Column(Integer, default=1, nullable=False, index=True)
+    is_primary_admin = Column(Boolean, default=False, nullable=False)
+    authorized_by_id = Column(Integer, nullable=True)
+
     email = Column(String(255), unique=True, index=True, nullable=False)
     phone = Column(String(30), unique=True, index=True, nullable=True)
     full_name = Column(String(255), nullable=False)

@@ -8,6 +8,7 @@ class Item(Base):
     __tablename__ = "items"
 
     id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, default=1, nullable=False, index=True)
     item_name = Column(String(255), index=True, nullable=False)
     item_type = Column(String(100), nullable=True)  # suit, duppatta, saree, etc.
     is_sarkam = Column(Boolean, default=False, nullable=True)

@@ -38,7 +38,8 @@ def get_dashboard_metrics(
     9. Total Payments
     10. Total Outstanding Payable
     """
-    return AnalyticsService.get_dashboard_metrics(db=db)
+    biz_id = current_user.business_id or 1
+    return AnalyticsService.get_dashboard_metrics(db=db, business_id=biz_id)
 
 
 @router.get(
@@ -68,6 +69,7 @@ def get_report_data(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> ReportResponse:
+    biz_id = current_user.business_id or 1
     return AnalyticsService.get_report_data(
         db=db,
         report_type=report_type,
@@ -77,6 +79,7 @@ def get_report_data(
         worker_id=worker_id,
         item_id=item_id,
         search_query=search_query,
+        business_id=biz_id,
     )
 
 
@@ -95,6 +98,7 @@ def export_report_csv(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
+    biz_id = current_user.business_id or 1
     report_data = AnalyticsService.get_report_data(
         db=db,
         report_type=report_type,
@@ -104,6 +108,7 @@ def export_report_csv(
         worker_id=worker_id,
         item_id=item_id,
         search_query=search_query,
+        business_id=biz_id,
     )
     csv_content = AnalyticsService.export_report_csv(report_data)
     today_str = date.today().strftime("%Y%m%d")
@@ -133,6 +138,7 @@ def get_pending_work_report(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ) -> PendingWorkReportResponse:
+    biz_id = current_user.business_id or 1
     return AnalyticsService.get_pending_work_report(
         db=db,
         start_date=start_date,
@@ -141,6 +147,7 @@ def get_pending_work_report(
         q=q,
         town=town,
         item_name=item_name,
+        business_id=biz_id,
     )
 
 
@@ -158,6 +165,7 @@ def export_pending_work_csv(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
+    biz_id = current_user.business_id or 1
     report_data = AnalyticsService.get_pending_work_report(
         db=db,
         start_date=start_date,
@@ -166,6 +174,7 @@ def export_pending_work_csv(
         q=q,
         town=town,
         item_name=item_name,
+        business_id=biz_id,
     )
     csv_content = AnalyticsService.export_pending_work_csv(report_data)
     today_str = date.today().strftime("%Y%m%d")

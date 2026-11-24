@@ -15,9 +15,11 @@ import {
   ArrowLeft,
   ShieldAlert,
   KeyRound,
-  Smartphone,
   RefreshCw,
   ShieldCheck,
+  Building2,
+  Briefcase,
+  MapPin,
   Settings as SettingsIcon,
 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
@@ -31,13 +33,14 @@ import { SMTPConfigModal } from '../components/auth/SMTPConfigModal';
 export const Login: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { login } = useAuth();
+  const { login, registerCompany } = useAuth();
   const { language, setLanguage, t } = useLanguage();
 
-  // Mode: login vs register vs forgot_password
-  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot_password'>('login');
+  // Mode: login vs register vs forgot_password vs create_company
+  const [authMode, setAuthMode] = useState<'login' | 'register' | 'forgot_password' | 'create_company'>('login');
 
   // Login Form State
+  const [loginCompanyName, setLoginCompanyName] = useState('Vinchhi Bandhej');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -45,7 +48,21 @@ export const Login: React.FC = () => {
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
-  // Register Form State
+  // Create Company Form State
+  const [compName, setCompName] = useState('');
+  const [compLegalName, setCompLegalName] = useState('');
+  const [compAdminName, setCompAdminName] = useState('');
+  const [compAdminEmail, setCompAdminEmail] = useState('');
+  const [compAdminPhone, setCompAdminPhone] = useState('');
+  const [compCity, setCompCity] = useState('Jamnagar');
+  const [compState, setCompState] = useState('Gujarat');
+  const [compPassword, setCompPassword] = useState('');
+  const [compConfirmPassword, setCompConfirmPassword] = useState('');
+  const [showCompPassword, setShowCompPassword] = useState(false);
+  const [showCompConfirmPassword, setShowCompConfirmPassword] = useState(false);
+  const [isSubmittingComp, setIsSubmittingComp] = useState(false);
+
+  // Manager Register Form State
   const [regFullName, setRegFullName] = useState('');
   const [regPhone, setRegPhone] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -67,7 +84,6 @@ export const Login: React.FC = () => {
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmNewPassword, setShowConfirmNewPassword] = useState(false);
   const [cooldownSeconds, setCooldownSeconds] = useState(0);
-  const [devOtpHint, setDevOtpHint] = useState<string | null>(null);
   const [isForgotLoading, setIsForgotLoading] = useState(false);
   const [showSmtpModal, setShowSmtpModal] = useState(false);
 
@@ -80,11 +96,18 @@ export const Login: React.FC = () => {
     return () => clearInterval(timer);
   }, [cooldownSeconds]);
 
-  const from = (location.state as any)?.from?.pathname || '/';
-
   // Handle Login Submit
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!loginCompanyName.trim()) {
+      setErrorMessage(
+        language === 'gu'
+          ? 'કૃપા કરીને તમારી કંપનીનું નામ દાખલ કરો.'
+          : 'Please enter your registered Company Name.'
+      );
+      return;
+    }
+
     if (!identifier.trim() || !password.trim()) {
       setErrorMessage(
         language === 'gu'
@@ -99,7 +122,7 @@ export const Login: React.FC = () => {
     setSuccessMessage(null);
 
     try {
-      const loginRes = await login(identifier.trim(), password);
+      const loginRes = await login(identifier.trim(), password, loginCompanyName.trim());
       const userRole = loginRes?.role || localStorage.getItem('bandhej_user_role');
 
       // Requirement: When logging in, Admin must first open Dashboard ('/')
@@ -121,8 +144,8 @@ export const Login: React.FC = () => {
       } else {
         setErrorMessage(
           language === 'gu'
-            ? 'ખોટા ઓળખપત્રો. કૃપા કરીને મોબાઇલ/ઇમેઇલ અને પાસવર્ડ ચકાસો.'
-            : err.message || 'Login failed. Please verify credentials.'
+            ? err.message || 'ખોટા ઓળખપત્રો. કૃપા કરીને કંપનીનું નામ, મોબાઇલ/ઇમેઇલ અને પાસવર્ડ ચકાસો.'
+            : err.message || 'Login failed. Please verify company name, credentials, and password.'
         );
       }
     } finally {
@@ -130,7 +153,96 @@ export const Login: React.FC = () => {
     }
   };
 
-  // Handle Register Submit
+  // Handle Create Company Submit
+  const handleCreateCompanySubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMessage(null);
+    setSuccessMessage(null);
+
+    if (!compName.trim()) {
+      setErrorMessage(
+        language === 'gu' ? 'કૃપા કરીને કંપનીનું નામ દાખલ કરો.' : 'Please enter the Company Name.'
+      );
+      return;
+    }
+
+    if (!compAdminName.trim()) {
+      setErrorMessage(
+        language === 'gu' ? 'કૃપા કરીને સંચાલકનું નામ દાખલ કરો.' : 'Please enter the Primary Admin full name.'
+      );
+      return;
+    }
+
+    if (!compAdminEmail.trim()) {
+      setErrorMessage(
+        language === 'gu' ? 'કૃપા કરીને ઇમેઇલ દાખલ કરો.' : 'Please enter a valid Admin email address.'
+      );
+      return;
+    }
+
+    if (!compAdminPhone.trim()) {
+      setErrorMessage(
+        language === 'gu' ? 'કૃપા કરીને મોબાઇલ નંબર દાખલ કરો.' : 'Please enter Admin mobile number.'
+      );
+      return;
+    }
+
+    if (!compPassword.trim() || compPassword.trim().length < 6) {
+      setErrorMessage(
+        language === 'gu'
+          ? 'પાસવર્ડ ઓછામાં ઓછો 6 અક્ષરોનો હોવો જોઈએ.'
+          : 'Password must be at least 6 characters long.'
+      );
+      return;
+    }
+
+    if (compPassword !== compConfirmPassword) {
+      setErrorMessage(
+        language === 'gu'
+          ? 'પાસવર્ડ અને કન્ફર્મ પાસવર્ડ સરખા નથી.'
+          : 'Password and confirm password do not match.'
+      );
+      return;
+    }
+
+    setIsSubmittingComp(true);
+
+    try {
+      await registerCompany({
+        company_name: compName.trim(),
+        legal_name: compLegalName.trim() || undefined,
+        full_name: compAdminName.trim(),
+        email: compAdminEmail.trim(),
+        phone: compAdminPhone.trim(),
+        password: compPassword.trim(),
+        city: compCity.trim() || 'Jamnagar',
+        state: compState.trim() || 'Gujarat',
+      });
+
+      // Clear form
+      setCompName('');
+      setCompLegalName('');
+      setCompAdminName('');
+      setCompAdminEmail('');
+      setCompAdminPhone('');
+      setCompPassword('');
+      setCompConfirmPassword('');
+
+      // Redirect Primary Admin directly to Company Dashboard
+      navigate('/', { replace: true });
+    } catch (err: any) {
+      setErrorMessage(
+        err.message ||
+        (language === 'gu'
+          ? 'કંપની બનાવવામાં ભૂલ આવી. કૃપા કરીને વિગતો તપાસીને ફરી પ્રયાસ કરો.'
+          : 'Failed to create company. Please verify details and try again.')
+      );
+    } finally {
+      setIsSubmittingComp(false);
+    }
+  };
+
+  // Handle Register Manager Submit
   const handleRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMessage(null);
@@ -230,9 +342,6 @@ export const Login: React.FC = () => {
       const res = await api.requestPasswordResetOTP(forgotIdentifier.trim(), 'email');
       setMaskedRecipient(res.masked_recipient || res.masked_phone || forgotIdentifier.trim());
       setCooldownSeconds(res.cooldown_seconds || 60);
-      if (res.dev_otp) {
-        setDevOtpHint(res.dev_otp);
-      }
       setSuccessMessage(res.message);
       setForgotStep('otp');
     } catch (err: any) {
@@ -248,7 +357,7 @@ export const Login: React.FC = () => {
     if (!otpCode.trim() || otpCode.trim().length < 4) {
       setErrorMessage(
         language === 'gu'
-          ? 'કૃપા કરીને ૬ અંકનો ચકાસણી કોડ દાખલ કરો.'
+          ? 'કૃપા કરીને ૬ અંકનો OTP કોડ દાખલ કરો.'
           : 'Please enter the 6-digit verification code.'
       );
       return;
@@ -261,14 +370,10 @@ export const Login: React.FC = () => {
     try {
       const res = await api.verifyPasswordResetOTP(forgotIdentifier.trim(), otpCode.trim());
       setResetToken(res.reset_token);
-      setSuccessMessage(
-        language === 'gu'
-          ? 'ચકાસણી સફળ થઈ! કૃપા કરીને નવો પાસવર્ડ બનાવો.'
-          : res.message
-      );
+      setSuccessMessage(res.message);
       setForgotStep('new_password');
     } catch (err: any) {
-      setErrorMessage(err.message || 'OTP verification failed.');
+      setErrorMessage(err.message || 'Invalid or expired OTP code.');
     } finally {
       setIsForgotLoading(false);
     }
@@ -277,26 +382,19 @@ export const Login: React.FC = () => {
   // Handle Forgot Password - Reset Password
   const handleResetPassword = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newPassword.trim()) {
+    if (!newPassword.trim() || newPassword.trim().length < 6) {
       setErrorMessage(
         language === 'gu'
-          ? 'કૃપા કરીને નવો પાસવર્ડ દાખલ કરો.'
-          : 'Please enter your new password.'
+          ? 'નવો પાસવર્ડ ઓછામાં ઓછો ૬ અક્ષરનો હોવો જોઈએ.'
+          : 'New password must be at least 6 characters long.'
       );
       return;
     }
-    if (newPassword.trim().length < 6) {
-      setErrorMessage(
-        language === 'gu'
-          ? 'પાસવર્ડ ઓછામાં ઓછો ૬ અક્ષરનો હોવો જોઈએ.'
-          : 'Password must be at least 6 characters long.'
-      );
-      return;
-    }
+
     if (newPassword !== confirmNewPassword) {
       setErrorMessage(
         language === 'gu'
-          ? 'પાસવર્ડ અને કન્ફર્મ પાસવર્ડ મેળ ખાતા નથી.'
+          ? 'નવો પાસવર્ડ અને કન્ફર્મ પાસવર્ડ સરખા નથી.'
           : 'New password and confirm password do not match.'
       );
       return;
@@ -331,15 +429,28 @@ export const Login: React.FC = () => {
     setResetToken('');
     setNewPassword('');
     setConfirmNewPassword('');
-    setDevOtpHint(null);
     setErrorMessage(null);
     setSuccessMessage(null);
   };
 
   return (
     <div className="min-h-screen flex flex-col justify-center py-12 px-4 sm:px-6 lg:px-8 bg-[#FFF9F6] relative">
-      {/* Top Language Toggle */}
-      <div className="absolute top-4 right-4 sm:top-6 sm:right-6">
+      {/* Top Right Controls: Create Company & Language Toggle */}
+      <div className="absolute top-4 right-4 sm:top-6 sm:right-6 flex items-center gap-2.5 z-20">
+        <button
+          type="button"
+          onClick={() => {
+            setAuthMode('create_company');
+            setErrorMessage(null);
+            setSuccessMessage(null);
+          }}
+          className="flex items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-[#A20D38]/30 hover:border-[#A20D38] bg-[#A20D38] hover:bg-[#880D32] text-white shadow-xs text-xs font-semibold transition-all active:scale-95 cursor-pointer"
+          title="Create Company / નવી કંપની બનાવો"
+        >
+          <Building2 className="w-3.5 h-3.5" />
+          <span>{language === 'gu' ? 'કંપની બનાવો' : 'Create Company'}</span>
+        </button>
+
         <button
           type="button"
           onClick={() => setLanguage(language === 'gu' ? 'en' : 'gu')}
@@ -386,9 +497,21 @@ export const Login: React.FC = () => {
 
           {authMode === 'login' && (
             /* ==================================================== */
-            /* VIEW 1: SIGN IN FORM                                 */
+            /* VIEW 1: SIGN IN FORM (Company, User, Password)        */
             /* ==================================================== */
             <form className="space-y-4" onSubmit={handleLoginSubmit}>
+              {/* Company Name */}
+              <Input
+                label={language === 'gu' ? 'કંપનીનું નામ' : 'Company Name'}
+                type="text"
+                required
+                value={loginCompanyName}
+                onChange={(e) => setLoginCompanyName(e.target.value)}
+                placeholder="e.g. Vinchhi Bandhej"
+                leftIcon={<Building2 className="w-4 h-4" />}
+              />
+
+              {/* Identifier */}
               <Input
                 label={language === 'gu' ? 'મોબાઇલ નંબર અથવા ઇમેઇલ' : 'Email Address or Mobile Number'}
                 type="text"
@@ -399,6 +522,7 @@ export const Login: React.FC = () => {
                 leftIcon={<Phone className="w-4 h-4" />}
               />
 
+              {/* Password */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
                   <label className="block text-xs sm:text-sm font-medium text-slate-700">
@@ -450,8 +574,8 @@ export const Login: React.FC = () => {
                 {language === 'gu' ? 'વર્કશોપમાં લૉગિન કરો' : 'Sign In to Workshop'}
               </Button>
 
-              {/* Register / Create Account Link */}
-              <div className="mt-4 pt-4 border-t border-slate-100 text-center">
+              {/* Links section */}
+              <div className="mt-4 pt-4 border-t border-slate-100 flex flex-col gap-2.5 text-center">
                 <button
                   type="button"
                   onClick={() => {
@@ -459,14 +583,228 @@ export const Login: React.FC = () => {
                     setErrorMessage(null);
                     setSuccessMessage(null);
                   }}
-                  className="inline-flex items-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-800 transition-colors cursor-pointer"
+                  className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-brand-600 hover:text-brand-800 transition-colors cursor-pointer"
                 >
                   <UserPlus className="w-3.5 h-3.5" />
                   <span>
                     {language === 'gu'
-                      ? 'ખાતું નથી? મેનેજર તરીકે રજીસ્ટ્રેશન કરો'
-                      : "Don't have an account? Register as Manager"}
+                      ? 'મેનેજર તરીકે રજીસ્ટ્રેશન કરો'
+                      : 'Register as Workshop Manager'}
                   </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('create_company');
+                    setErrorMessage(null);
+                    setSuccessMessage(null);
+                  }}
+                  className="inline-flex items-center justify-center gap-1.5 text-xs font-semibold text-[#A20D38] hover:text-[#880D32] transition-colors cursor-pointer"
+                >
+                  <Building2 className="w-3.5 h-3.5" />
+                  <span>
+                    {language === 'gu'
+                      ? 'નવો વ્યવસાય શરૂ કરો? કંપની બનાવો'
+                      : 'Starting a new business? Create Company'}
+                  </span>
+                </button>
+              </div>
+            </form>
+          )}
+
+          {authMode === 'create_company' && (
+            /* ==================================================== */
+            /* VIEW 2: CREATE COMPANY & PRIMARY ADMIN FORM           */
+            /* ==================================================== */
+            <form className="space-y-3.5" onSubmit={handleCreateCompanySubmit}>
+              <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-2">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-xl bg-[#A20D38]/10 text-[#A20D38] flex items-center justify-center">
+                    <Building2 className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-sm text-slate-900">
+                      {language === 'gu' ? 'નવી કંપની નોંધણી' : 'Create New Company'}
+                    </h3>
+                    <p className="text-[11px] text-slate-500">
+                      {language === 'gu' ? 'પ્રાથમિક એડમિન અને વ્યવસાય સેટઅપ' : 'Primary Admin & Business Setup'}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('login');
+                    setErrorMessage(null);
+                    setSuccessMessage(null);
+                  }}
+                  className="text-xs text-slate-500 hover:text-slate-800 flex items-center gap-1 font-medium cursor-pointer"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                  <span>{language === 'gu' ? 'પાછા જાવ' : 'Back'}</span>
+                </button>
+              </div>
+
+              {/* Notice Banner */}
+              <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] flex items-start gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <div className="leading-tight">
+                  {language === 'gu'
+                    ? 'કંપની બનાવનાર વ્યક્તિ આપમેળે તે વ્યવસાયના પ્રાથમિક એડમિન (Primary Admin) બનશે. અનોખો Company ID જનરેટ થશે.'
+                    : 'The person registering this company automatically becomes its Primary Admin with a unique Company ID.'}
+                </div>
+              </div>
+
+              {/* Company Name */}
+              <Input
+                label={language === 'gu' ? 'કંપનીનું નામ (વેપારી નામ)' : 'Company Name'}
+                type="text"
+                required
+                value={compName}
+                onChange={(e) => setCompName(e.target.value)}
+                placeholder="e.g. Shree Radhe Bandhej"
+                leftIcon={<Building2 className="w-4 h-4" />}
+              />
+
+              {/* Legal Name */}
+              <Input
+                label={language === 'gu' ? 'કાનૂની પેઢીનું નામ (વૈકલ્પિક)' : 'Legal / Registered Firm Name (Optional)'}
+                type="text"
+                value={compLegalName}
+                onChange={(e) => setCompLegalName(e.target.value)}
+                placeholder="e.g. Shree Radhe Bandhej Creations LLP"
+                leftIcon={<Briefcase className="w-4 h-4" />}
+              />
+
+              {/* Primary Admin Full Name */}
+              <Input
+                label={language === 'gu' ? 'મુખ્ય સંચાલકનું પૂરું નામ' : 'Primary Admin Full Name'}
+                type="text"
+                required
+                value={compAdminName}
+                onChange={(e) => setCompAdminName(e.target.value)}
+                placeholder="e.g. Rameshbhai Patel"
+                leftIcon={<User className="w-4 h-4" />}
+              />
+
+              {/* Primary Admin Mobile */}
+              <Input
+                label={language === 'gu' ? 'મુખ્ય સંચાલકનો મોબાઇલ નંબર' : 'Primary Admin Mobile Number'}
+                type="text"
+                required
+                value={compAdminPhone}
+                onChange={(e) => setCompAdminPhone(e.target.value)}
+                placeholder="e.g. +91 98250 99999"
+                leftIcon={<Phone className="w-4 h-4" />}
+              />
+
+              {/* Primary Admin Email */}
+              <Input
+                label={language === 'gu' ? 'મુખ્ય સંચાલકનું ઇમેઇલ' : 'Primary Admin Email Address'}
+                type="email"
+                required
+                value={compAdminEmail}
+                onChange={(e) => setCompAdminEmail(e.target.value)}
+                placeholder="e.g. ramesh@radhebandhej.com"
+                leftIcon={<Mail className="w-4 h-4" />}
+              />
+
+              {/* City & State Row */}
+              <div className="grid grid-cols-2 gap-3">
+                <Input
+                  label={language === 'gu' ? 'શહેર' : 'City'}
+                  type="text"
+                  value={compCity}
+                  onChange={(e) => setCompCity(e.target.value)}
+                  placeholder="Jamnagar"
+                  leftIcon={<MapPin className="w-3.5 h-3.5" />}
+                />
+                <Input
+                  label={language === 'gu' ? 'રાજ્ય' : 'State'}
+                  type="text"
+                  value={compState}
+                  onChange={(e) => setCompState(e.target.value)}
+                  placeholder="Gujarat"
+                />
+              </div>
+
+              {/* Password */}
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-slate-700">
+                  {language === 'gu' ? 'એડમિન પાસવર્ડ' : 'Admin Password (min 6 chars)'}
+                </label>
+                <Input
+                  type={showCompPassword ? 'text' : 'password'}
+                  required
+                  value={compPassword}
+                  onChange={(e) => setCompPassword(e.target.value)}
+                  placeholder="At least 6 characters"
+                  leftIcon={<Lock className="w-4 h-4" />}
+                  rightIcon={
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowCompPassword(!showCompPassword)}
+                      className="p-1 rounded-md text-slate-400 hover:text-slate-700 focus:outline-none cursor-pointer transition-colors"
+                      title={showCompPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showCompPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  }
+                />
+              </div>
+
+              {/* Confirm Password */}
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-slate-700">
+                  {language === 'gu' ? 'પાસવર્ડ ફરીથી લખો' : 'Confirm Password'}
+                </label>
+                <Input
+                  type={showCompConfirmPassword ? 'text' : 'password'}
+                  required
+                  value={compConfirmPassword}
+                  onChange={(e) => setCompConfirmPassword(e.target.value)}
+                  placeholder="Re-enter password"
+                  leftIcon={<Lock className="w-4 h-4" />}
+                  rightIcon={
+                    <button
+                      type="button"
+                      tabIndex={-1}
+                      onClick={() => setShowCompConfirmPassword(!showCompConfirmPassword)}
+                      className="p-1 rounded-md text-slate-400 hover:text-slate-700 focus:outline-none cursor-pointer transition-colors"
+                      title={showCompConfirmPassword ? 'Hide password' : 'Show password'}
+                    >
+                      {showCompConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                    </button>
+                  }
+                />
+              </div>
+
+              <Button
+                type="submit"
+                variant="primary"
+                size="lg"
+                className="w-full mt-2"
+                isLoading={isSubmittingComp}
+              >
+                {language === 'gu' ? 'કંપની રજીસ્ટર કરો અને ડેશબોર્ડ ખોલો' : 'Create Company & Enter Dashboard'}
+              </Button>
+
+              {/* Back to Login Link */}
+              <div className="mt-3 pt-3 border-t border-slate-100 text-center">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAuthMode('login');
+                    setErrorMessage(null);
+                    setSuccessMessage(null);
+                  }}
+                  className="text-xs font-semibold text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
+                >
+                  {language === 'gu'
+                    ? 'પહેલેથી કંપની નોંધાયેલી છે? લૉગિન કરો'
+                    : 'Company already registered? Sign In'}
                 </button>
               </div>
             </form>
@@ -474,7 +812,7 @@ export const Login: React.FC = () => {
 
           {authMode === 'register' && (
             /* ==================================================== */
-            /* VIEW 2: MANAGER REGISTRATION FORM                    */
+            /* VIEW 3: MANAGER REGISTRATION FORM                    */
             /* ==================================================== */
             <form className="space-y-3.5" onSubmit={handleRegisterSubmit}>
               <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-2">
@@ -626,7 +964,7 @@ export const Login: React.FC = () => {
 
           {authMode === 'forgot_password' && (
             /* ==================================================== */
-            /* VIEW 3: FORGOT PASSWORD – EMAIL & MOBILE OTP          */
+            /* VIEW 4: FORGOT PASSWORD – EMAIL OTP                  */
             /* ==================================================== */
             <div className="space-y-4">
               <div className="flex items-center justify-between border-b border-slate-100 pb-2.5 mb-1">

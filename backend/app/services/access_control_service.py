@@ -123,9 +123,17 @@ class AccessControlService:
         ip_address: Optional[str] = None,
         user_agent: Optional[str] = None,
         details: Optional[str] = None,
+        business_id: Optional[int] = None,
     ) -> AuditLog:
-        """Persists a security audit log entry."""
+        """Persists a security audit log entry scoped to business."""
+        biz_id = business_id
+        if biz_id is None and user_id:
+            user_rec = db.query(User.business_id).filter(User.id == user_id).first()
+            if user_rec and user_rec[0]:
+                biz_id = user_rec[0]
+
         log_entry = AuditLog(
+            business_id=biz_id or 1,
             user_id=user_id,
             user_email=user_email,
             user_role=user_role,

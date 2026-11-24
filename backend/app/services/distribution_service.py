@@ -70,16 +70,23 @@ class DistributionService:
         data: WorkDistributionCreate,
         user_id: Optional[int] = None,
         user_name: Optional[str] = "Admin",
+        business_id: Optional[int] = None,
     ) -> WorkDistribution:
         """
         Gives work consignment to worker with HISTORICAL PRICE SNAPSHOT.
         Posts a DEBIT entry to the Material Debit-Credit Ledger (worker-account perspective).
         """
-        worker = db.query(Worker).filter(Worker.id == data.worker_id).with_for_update().first()
+        worker_query = db.query(Worker).filter(Worker.id == data.worker_id)
+        if business_id is not None:
+            worker_query = worker_query.filter(Worker.business_id == business_id)
+        worker = worker_query.with_for_update().first()
         if not worker:
             raise HTTPException(status_code=404, detail=f"Worker #{data.worker_id} not found.")
 
-        item = db.query(Item).filter(Item.id == data.item_id).first()
+        item_query = db.query(Item).filter(Item.id == data.item_id)
+        if business_id is not None:
+            item_query = item_query.filter(Item.business_id == business_id)
+        item = item_query.first()
         if not item:
             raise HTTPException(status_code=404, detail=f"Item #{data.item_id} not found in catalogue.")
 
@@ -93,11 +100,13 @@ class DistributionService:
         batch_code = DistributionService.generate_distribution_code(db)
         issue_dt = data.issue_date or date.today()
         due_dt = data.due_date or (issue_dt + timedelta(days=14))
+        biz_id = worker.business_id or business_id or 1
 
         try:
             with atomic_transaction(db):
                 # 1. Create Work Distribution record
                 distribution = WorkDistribution(
+                    business_id=biz_id,
                     batch_code=batch_code,
                     worker_id=worker.id,
                     item_id=item.id,
@@ -125,6 +134,7 @@ class DistributionService:
                 new_running_balance = int(worker.pending_pieces) + data.quantity_issued
                 mtxn_code = DistributionService.generate_material_txn_code(db)
                 mat_txn = MaterialTransaction(
+                    business_id=biz_id,
                     transaction_code=mtxn_code,
                     worker_id=worker.id,
                     distribution_id=distribution.id,
@@ -147,6 +157,7 @@ class DistributionService:
 
                 # 3. Backward-compatible raw fabric ledger entry
                 mat_entry = MaterialLedgerEntry(
+                    business_id=biz_id,
                     worker_id=worker.id,
                     lot_number=batch_code,
                     material_type=f"{item.item_name} (Pieces)",
@@ -170,6 +181,7 @@ class DistributionService:
 
                 # 5. Audit Log
                 audit = AuditLog(
+                    business_id=biz_id,
                     user_id=user_id,
                     user_email=user_name,
                     action="WORK_DISTRIBUTION_GIVEN",
@@ -191,6 +203,7 @@ class DistributionService:
         data: WorkReturnCreate,
         user_id: Optional[int] = None,
         user_name: Optional[str] = "Admin",
+        business_id: Optional[int] = None,
     ) -> WorkReturn:
         """
         Receives partial or full completed work against an existing distribution.
@@ -198,9 +211,10 @@ class DistributionService:
         Enforces validation preventing over-returns, negative quantities, or incorrect wages.
         Posts a CREDIT entry to the Material Debit-Credit Ledger (worker-account perspective).
         """
-        distribution = db.query(WorkDistribution).filter(
-            WorkDistribution.id == data.distribution_id
-        ).with_for_update().first()
+        dist_query = db.query(WorkDistribution).filter(WorkDistribution.id == data.distribution_id)
+        if business_id is not None:
+            dist_query = dist_query.filter(WorkDistribution.business_id == business_id)
+        distribution = dist_query.with_for_update().first()
         if not distribution:
             raise HTTPException(status_code=404, detail="Work distribution record not found.")
 
@@ -234,11 +248,13 @@ class DistributionService:
 
         return_code = DistributionService.generate_return_code(db)
         ret_date = data.return_date or date.today()
+        biz_id = distribution.business_id or business_id or 1
 
         try:
             with atomic_transaction(db):
                 # 1. Create WorkReturn record
                 work_return = WorkReturn(
+                    business_id=biz_id,
                     return_code=return_code,
                     distribution_id=distribution.id,
                     worker_id=worker.id,
@@ -288,6 +304,7 @@ class DistributionService:
                 mtxn_code = DistributionService.generate_material_txn_code(db)
                 txn_type = "CREDIT_RECEIVED" if qty_accepted > 0 else "REJECTED_RETURNED"
                 mat_txn = MaterialTransaction(
+                    business_id=biz_id,
                     transaction_code=mtxn_code,
                     worker_id=worker.id,
                     distribution_id=distribution.id,
@@ -313,6 +330,7 @@ class DistributionService:
                 if earned_wage > 0:
                     fin_code = f"FIN-{ret_date.strftime('%Y%m%d')}-{db.query(MoneyTransaction).count() + 1:04d}"
                     money_txn = MoneyTransaction(
+                        business_id=biz_id,
                         transaction_code=fin_code,
                         worker_id=worker.id,
                         distribution_id=distribution.id,
@@ -331,6 +349,7 @@ class DistributionService:
 
                 # 6. Audit Log
                 audit = AuditLog(
+                    business_id=biz_id,
                     user_id=user_id,
                     user_email=user_name,
                     action="WORK_RETURN_RECORDED",
@@ -434,12 +453,15 @@ class DistributionService:
     @staticmethod
     def get_pending_distributions(
         db: Session,
-        worker_id: Optional[int] = None
+        worker_id: Optional[int] = None,
+        business_id: Optional[int] = None
     ) -> List[WorkDistributionResponse]:
         """
         Returns all distributions that have pending pieces (quantity_pending > 0).
         """
         query = db.query(WorkDistribution).filter(WorkDistribution.quantity_pending > 0)
+        if business_id is not None:
+            query = query.filter(WorkDistribution.business_id == business_id)
         if worker_id:
             query = query.filter(WorkDistribution.worker_id == worker_id)
 
@@ -459,12 +481,15 @@ class DistributionService:
         db: Session,
         worker_id: Optional[int] = None,
         status_filter: Optional[str] = None,
-        search_query: Optional[str] = None
+        search_query: Optional[str] = None,
+        business_id: Optional[int] = None
     ) -> List[WorkDistributionResponse]:
         """
         Returns all distributions with optional worker, status, and search filters.
         """
         query = db.query(WorkDistribution)
+        if business_id is not None:
+            query = query.filter(WorkDistribution.business_id == business_id)
         if worker_id:
             query = query.filter(WorkDistribution.worker_id == worker_id)
         if status_filter and status_filter != "All":

@@ -77,12 +77,16 @@ class PaymentService:
         data: AdvanceCreateRequest,
         user_id: Optional[int] = None,
         user_name: Optional[str] = "Admin",
+        business_id: Optional[int] = None,
     ) -> MoneyTransaction:
         """
         Records cash or digital advance taken by worker.
         Worker-Account Perspective: DEBITS the worker's money account and reduces payable balance.
         """
-        worker = db.query(Worker).filter(Worker.id == data.worker_id).with_for_update().first()
+        worker_query = db.query(Worker).filter(Worker.id == data.worker_id)
+        if business_id is not None:
+            worker_query = worker_query.filter(Worker.business_id == business_id)
+        worker = worker_query.with_for_update().first()
         if not worker:
             raise HTTPException(status_code=404, detail=f"Worker #{data.worker_id} not found.")
 
@@ -100,11 +104,13 @@ class PaymentService:
 
         pay_dt = data.payment_date or date.today()
         ref = data.reference_no.strip() if data.reference_no else None
+        biz_id = worker.business_id or business_id or 1
 
         try:
             with atomic_transaction(db):
                 # 1. Create PaymentRecord
                 payment = PaymentRecord(
+                    business_id=biz_id,
                     worker_id=worker.id,
                     payment_type="Advance Given",
                     amount=data.amount,
@@ -133,6 +139,7 @@ class PaymentService:
                     desc_text += f" (Ref: {ref})"
 
                 money_txn = MoneyTransaction(
+                    business_id=biz_id,
                     transaction_code=txn_code,
                     worker_id=worker.id,
                     payment_record_id=payment.id,
@@ -152,6 +159,7 @@ class PaymentService:
 
                 # 4. Audit Log
                 audit = AuditLog(
+                    business_id=biz_id,
                     user_id=user_id,
                     user_email=user_name,
                     action="ADVANCE_GIVEN_RECORDED",
@@ -173,12 +181,16 @@ class PaymentService:
         data: PayoutCreateRequest,
         user_id: Optional[int] = None,
         user_name: Optional[str] = "Admin",
+        business_id: Optional[int] = None,
     ) -> MoneyTransaction:
         """
         Records wage payout (partial payment or full settlement).
         Worker-Account Perspective: DEBITS the worker's money account and reduces payable balance.
         """
-        worker = db.query(Worker).filter(Worker.id == data.worker_id).with_for_update().first()
+        worker_query = db.query(Worker).filter(Worker.id == data.worker_id)
+        if business_id is not None:
+            worker_query = worker_query.filter(Worker.business_id == business_id)
+        worker = worker_query.with_for_update().first()
         if not worker:
             raise HTTPException(status_code=404, detail=f"Worker #{data.worker_id} not found.")
 
@@ -200,11 +212,13 @@ class PaymentService:
 
         pay_dt = data.payment_date or date.today()
         ref = data.reference_no.strip() if data.reference_no else None
+        biz_id = worker.business_id or business_id or 1
 
         try:
             with atomic_transaction(db):
                 # 1. Create PaymentRecord
                 payment = PaymentRecord(
+                    business_id=biz_id,
                     worker_id=worker.id,
                     payment_type="Wage Payout",
                     amount=payout_amount,
@@ -235,6 +249,7 @@ class PaymentService:
                     desc_text += f" (Ref: {ref})"
 
                 money_txn = MoneyTransaction(
+                    business_id=biz_id,
                     transaction_code=txn_code,
                     worker_id=worker.id,
                     payment_record_id=payment.id,
@@ -254,6 +269,7 @@ class PaymentService:
 
                 # 4. Audit Log
                 audit = AuditLog(
+                    business_id=biz_id,
                     user_id=user_id,
                     user_email=user_name,
                     action="WAGE_PAYOUT_RECORDED",

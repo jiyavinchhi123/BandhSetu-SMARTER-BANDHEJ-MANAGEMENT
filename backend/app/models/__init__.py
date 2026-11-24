@@ -1,3 +1,4 @@
+from app.models.company import Company
 from app.models.user import User
 from app.models.audit_log import AuditLog
 from app.models.worker import Worker
@@ -11,6 +12,7 @@ from app.models.payment_record import PaymentRecord
 from app.models.password_reset import PasswordResetOTP
 
 __all__ = [
+    "Company",
     "User",
     "AuditLog",
     "Worker",

@@ -57,11 +57,13 @@ def record_advance(
         return replay[1]
 
     try:
+        biz_id = current_user.business_id or 1
         result = PaymentService.record_advance(
             db=db,
             data=data,
             user_id=current_user.id,
             user_name=current_user.full_name,
+            business_id=biz_id,
         )
         idempotency_engine.record_success(idem_key, 201, result)
         return result
@@ -107,11 +109,13 @@ def record_payout(
         return replay[1]
 
     try:
+        biz_id = current_user.business_id or 1
         result = PaymentService.record_payout(
             db=db,
             data=data,
             user_id=current_user.id,
             user_name=current_user.full_name,
+            business_id=biz_id,
         )
         idempotency_engine.record_success(idem_key, 201, result)
         return result
@@ -139,6 +143,12 @@ def get_money_ledger(
     - Total Payable = Total Credits - Total Debits
     - Chronological transaction history with running balances
     """
+    from app.models.worker import Worker
+    biz_id = current_user.business_id or 1
+    worker = db.query(Worker).filter(Worker.id == worker_id, Worker.business_id == biz_id).first()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found in your company.")
+
     return PaymentService.get_money_ledger_summary(
         db=db,
         worker_id=worker_id,
@@ -163,6 +173,12 @@ def reverse_money_transaction(
     Never permanently deletes any record; marks as reversed and
     posts a compensating adjustment entry.
     """
+    from app.models.money_transaction import MoneyTransaction
+    biz_id = current_user.business_id or 1
+    txn = db.query(MoneyTransaction).filter(MoneyTransaction.id == txn_id, MoneyTransaction.business_id == biz_id).first()
+    if not txn:
+        raise HTTPException(status_code=404, detail="Transaction not found in your company.")
+
     return PaymentService.reverse_money_transaction(
         db=db,
         txn_id=txn_id,
@@ -184,6 +200,12 @@ def download_statement_csv(
     """
     Generates a downloadable CSV statement of the artisan's Money Ledger.
     """
+    from app.models.worker import Worker
+    biz_id = current_user.business_id or 1
+    worker = db.query(Worker).filter(Worker.id == worker_id, Worker.business_id == biz_id).first()
+    if not worker:
+        raise HTTPException(status_code=404, detail="Worker not found in your company.")
+
     summary = PaymentService.get_money_ledger_summary(db=db, worker_id=worker_id)
 
     output = StringIO()

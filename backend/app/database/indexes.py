@@ -43,6 +43,16 @@ INDEX_DEFINITIONS = [
     # Password Reset OTP: Expiration & Verification lookup
     "CREATE INDEX IF NOT EXISTS idx_otp_email_created ON password_reset_otps(email, created_at);",
     "CREATE INDEX IF NOT EXISTS idx_otp_expires_used ON password_reset_otps(expires_at, is_used);",
+
+    # Multi-Tenant Business Isolation Indexes
+    "CREATE INDEX IF NOT EXISTS idx_workers_business_status ON workers(business_id, status);",
+    "CREATE INDEX IF NOT EXISTS idx_items_business_active ON items(business_id, is_active);",
+    "CREATE INDEX IF NOT EXISTS idx_dist_business_status ON work_distributions(business_id, status);",
+    "CREATE INDEX IF NOT EXISTS idx_users_business_role ON users(business_id, role);",
+    "CREATE INDEX IF NOT EXISTS idx_money_business_worker ON money_transactions(business_id, worker_id);",
+    "CREATE INDEX IF NOT EXISTS idx_returns_business_worker ON work_returns(business_id, worker_id);",
+    "CREATE INDEX IF NOT EXISTS idx_payments_business_worker ON payment_records(business_id, worker_id);",
+    "CREATE INDEX IF NOT EXISTS idx_audit_business_user ON audit_logs(business_id, user_id);",
 ]
 
 
@@ -63,13 +73,91 @@ def ensure_version_columns(engine: Engine) -> int:
     return applied
 
 
+def ensure_multi_tenant_schema(engine: Engine) -> int:
+    """
+    Idempotently ensures the 'companies' table exists and migrates all existing tables
+    to include 'business_id', 'is_primary_admin', and 'authorized_by_id'.
+    Seeds Default Company 1 ('Vinchhi Bandhej') and links all existing records
+    to Company 1 so that ZERO existing data is lost or reset.
+    """
+    from app.database.session import Base
+    from app.models.company import Company
+
+    # 1. Create any missing tables (e.g. companies)
+    Base.metadata.create_all(bind=engine)
+
+    applied = 0
+    tables = [
+        "users",
+        "workers",
+        "items",
+        "work_distributions",
+        "work_returns",
+        "material_transactions",
+        "money_transactions",
+        "payment_records",
+        "material_ledger_entries",
+        "audit_logs",
+    ]
+
+    with engine.connect() as conn:
+        for tbl in tables:
+            try:
+                conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN business_id INTEGER NOT NULL DEFAULT 1;"))
+                conn.commit()
+                applied += 1
+            except Exception:
+                pass  # Column already exists
+
+        # Multi-admin columns on users table
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN is_primary_admin BOOLEAN NOT NULL DEFAULT 0;"))
+            conn.commit()
+        except Exception:
+            pass
+
+        try:
+            conn.execute(text("ALTER TABLE users ADD COLUMN authorized_by_id INTEGER;"))
+            conn.commit()
+        except Exception:
+            pass
+
+        # Seed Default Company 1 ('Vinchhi Bandhej') if not existing
+        try:
+            comp_exists = conn.execute(text("SELECT COUNT(*) FROM companies WHERE id = 1;")).scalar()
+            if not comp_exists:
+                conn.execute(text("""
+                    INSERT INTO companies (id, code, name, legal_name, owner_admin_id, status, created_at, updated_at)
+                    VALUES (1, 'COMP-0001', 'Vinchhi Bandhej', 'Vinchhi Bandhej Creations', 1, 'Active', datetime('now'), datetime('now'));
+                """))
+                conn.commit()
+        except Exception as ce:
+            logger.debug(f"Default company seed notice: {ce}")
+
+        # Ensure Admin Bhavna Mehta (id=1) is marked as primary admin for Company 1
+        try:
+            conn.execute(text("UPDATE users SET is_primary_admin = 1, business_id = 1 WHERE id = 1;"))
+            conn.execute(text("UPDATE users SET business_id = 1 WHERE business_id IS NULL;"))
+            conn.commit()
+        except Exception:
+            pass
+
+    return applied
+
+
 def ensure_database_indexes(engine: Engine) -> int:
     """
     Idempotently creates high-performance composite indexes across core tables.
     Safe to run repeatedly on SQLite and PostgreSQL.
     Returns the count of indexes processed.
     """
-    # 1. Ensure optimistic locking version columns
+    # 1. Ensure multi-tenant schema & default company
+    try:
+        ensure_multi_tenant_schema(engine)
+    except Exception as me:
+        logger.debug(f"Multi-tenant schema notice: {me}")
+
+    # 2. Ensure optimistic locking version columns
     try:
         ensure_version_columns(engine)
     except Exception as e:

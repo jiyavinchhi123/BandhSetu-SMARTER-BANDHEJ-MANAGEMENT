@@ -28,8 +28,12 @@ def list_managers(
     admin_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    """Admin retrieves all Manager accounts with operating windows, lock states and activity."""
-    managers = db.query(User).filter(User.role == "manager").order_by(User.id.asc()).all()
+    """Admin retrieves all Manager accounts scoped strictly to their company."""
+    biz_id = admin_user.business_id or 1
+    managers = db.query(User).filter(
+        User.role == "manager",
+        User.business_id == biz_id
+    ).order_by(User.id.asc()).all()
     return managers
 
 
@@ -41,9 +45,11 @@ def create_manager(
     db: Session = Depends(get_db)
 ):
     """
-    Admin creates an Authorized Operator / Manager account.
+    Admin creates an Authorized Operator / Manager account for their company.
     Manager accounts can never be created with Admin role.
     """
+    biz_id = admin_user.business_id or 1
+
     # Check for existing email or phone
     existing = db.query(User).filter(
         (User.email == req.email) | (User.phone == req.phone if req.phone else False)
@@ -55,9 +61,11 @@ def create_manager(
         )
 
     new_manager = User(
-        email=req.email,
-        phone=req.phone,
-        full_name=req.full_name,
+        business_id=biz_id,
+        authorized_by_id=admin_user.id,
+        email=req.email.strip().lower(),
+        phone=req.phone.strip() if req.phone else None,
+        full_name=req.full_name.strip(),
         hashed_password=hash_password(req.password),
         role="manager",  # Strictly manager
         is_active=True,
@@ -78,7 +86,7 @@ def create_manager(
         user_email=admin_user.email,
         user_role="admin",
         ip_address=client_ip,
-        details=f"Created Manager account {new_manager.email} with hours {new_manager.access_start_time}-{new_manager.access_end_time} IST"
+        details=f"Created Manager account {new_manager.email} for business #{biz_id} with hours {new_manager.access_start_time}-{new_manager.access_end_time} IST"
     )
 
     return new_manager
@@ -96,9 +104,14 @@ def lock_manager(
     Admin locks Manager immediately, even during permitted hours.
     Manual lock overrides the scheduled access window and immediately revokes all active sessions.
     """
-    manager = db.query(User).filter(User.id == manager_id, User.role == "manager").first()
+    biz_id = admin_user.business_id or 1
+    manager = db.query(User).filter(
+        User.id == manager_id,
+        User.role == "manager",
+        User.business_id == biz_id
+    ).first()
     if not manager:
-        raise HTTPException(status_code=404, detail="Manager account not found.")
+        raise HTTPException(status_code=404, detail="Manager account not found in your company.")
 
     manager.is_locked = True
     manager.lock_reason = req.reason or "Locked immediately by Admin"
@@ -132,9 +145,14 @@ def unlock_manager(
     """
     Only Admin can unlock a manually locked Manager account.
     """
-    manager = db.query(User).filter(User.id == manager_id, User.role == "manager").first()
+    biz_id = admin_user.business_id or 1
+    manager = db.query(User).filter(
+        User.id == manager_id,
+        User.role == "manager",
+        User.business_id == biz_id
+    ).first()
     if not manager:
-        raise HTTPException(status_code=404, detail="Manager account not found.")
+        raise HTTPException(status_code=404, detail="Manager account not found in your company.")
 
     manager.is_locked = False
     manager.lock_reason = None
@@ -164,9 +182,14 @@ def toggle_manager_active(
     db: Session = Depends(get_db)
 ):
     """Admin enables or disables a Manager account."""
-    manager = db.query(User).filter(User.id == manager_id, User.role == "manager").first()
+    biz_id = admin_user.business_id or 1
+    manager = db.query(User).filter(
+        User.id == manager_id,
+        User.role == "manager",
+        User.business_id == biz_id
+    ).first()
     if not manager:
-        raise HTTPException(status_code=404, detail="Manager account not found.")
+        raise HTTPException(status_code=404, detail="Manager account not found in your company.")
 
     manager.is_active = not manager.is_active
     manager.token_version += 1  # Revoke session if disabled
@@ -199,9 +222,14 @@ def update_manager_timing(
     """
     Admin updates start and end operating hours for Manager in IST (HH:MM format).
     """
-    manager = db.query(User).filter(User.id == manager_id, User.role == "manager").first()
+    biz_id = admin_user.business_id or 1
+    manager = db.query(User).filter(
+        User.id == manager_id,
+        User.role == "manager",
+        User.business_id == biz_id
+    ).first()
     if not manager:
-        raise HTTPException(status_code=404, detail="Manager account not found.")
+        raise HTTPException(status_code=404, detail="Manager account not found in your company.")
 
     manager.access_start_time = req.access_start_time
     manager.access_end_time = req.access_end_time
@@ -233,9 +261,14 @@ def extend_manager_hours(
     """
     Admin temporarily extends Manager access hours beyond normal closing time.
     """
-    manager = db.query(User).filter(User.id == manager_id, User.role == "manager").first()
+    biz_id = admin_user.business_id or 1
+    manager = db.query(User).filter(
+        User.id == manager_id,
+        User.role == "manager",
+        User.business_id == biz_id
+    ).first()
     if not manager:
-        raise HTTPException(status_code=404, detail="Manager account not found.")
+        raise HTTPException(status_code=404, detail="Manager account not found in your company.")
 
     now_ist = datetime.now(IST)
     new_extension_ist = now_ist + timedelta(minutes=req.extend_minutes)
@@ -268,9 +301,14 @@ def approve_manager(
     Admin approves a registered manager account.
     Activates account, clears pending status, and allows login within operating window.
     """
-    manager = db.query(User).filter(User.id == manager_id, User.role == "manager").first()
+    biz_id = admin_user.business_id or 1
+    manager = db.query(User).filter(
+        User.id == manager_id,
+        User.role == "manager",
+        User.business_id == biz_id
+    ).first()
     if not manager:
-        raise HTTPException(status_code=404, detail="Manager account not found.")
+        raise HTTPException(status_code=404, detail="Manager account not found in your company.")
 
     manager.is_active = True
     manager.is_locked = False
@@ -301,9 +339,14 @@ def delete_manager(
     db: Session = Depends(get_db)
 ):
     """Admin removes or declines a manager account."""
-    manager = db.query(User).filter(User.id == manager_id, User.role == "manager").first()
+    biz_id = admin_user.business_id or 1
+    manager = db.query(User).filter(
+        User.id == manager_id,
+        User.role == "manager",
+        User.business_id == biz_id
+    ).first()
     if not manager:
-        raise HTTPException(status_code=404, detail="Manager account not found.")
+        raise HTTPException(status_code=404, detail="Manager account not found in your company.")
 
     client_ip = request.client.host if request.client else "unknown"
     mgr_email = manager.email
@@ -331,8 +374,11 @@ def get_all_audit_logs(
     admin_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    """Admin views recent login, logout, lock, and security activity history."""
-    logs = db.query(AuditLog).order_by(AuditLog.id.desc()).limit(limit).all()
+    """Admin views recent login, logout, lock, and security activity history for their company."""
+    biz_id = admin_user.business_id or 1
+    logs = db.query(AuditLog).filter(
+        AuditLog.business_id == biz_id
+    ).order_by(AuditLog.id.desc()).limit(limit).all()
     return logs
 
 
@@ -343,7 +389,17 @@ def get_manager_audit_logs(
     admin_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
-    """Admin inspects login, logout, and activity logs specifically for a Manager."""
-    logs = db.query(AuditLog).filter(AuditLog.user_id == manager_id).order_by(AuditLog.id.desc()).limit(limit).all()
-    return logs
+    """Admin inspects login, logout, and activity logs specifically for a Manager in their company."""
+    biz_id = admin_user.business_id or 1
+    manager = db.query(User).filter(
+        User.id == manager_id,
+        User.business_id == biz_id
+    ).first()
+    if not manager:
+        raise HTTPException(status_code=404, detail="Manager not found in your company.")
 
+    logs = db.query(AuditLog).filter(
+        AuditLog.user_id == manager_id,
+        AuditLog.business_id == biz_id
+    ).order_by(AuditLog.id.desc()).limit(limit).all()
+    return logs

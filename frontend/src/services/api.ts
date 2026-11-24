@@ -14,6 +14,11 @@ export interface HealthResponse {
 
 export interface UserProfile {
   id: number;
+  business_id?: number;
+  company_name?: string;
+  company_code?: string;
+  is_primary_admin?: boolean;
+  authorized_by_id?: number | null;
   email: string;
   phone?: string | null;
   full_name: string;
@@ -51,11 +56,40 @@ export interface LoginResponse {
   full_name: string;
   email: string;
   phone?: string | null;
+  business_id?: number;
+  company_name?: string;
+  company_code?: string;
+  is_primary_admin?: boolean;
   access_start_time: string;
   access_end_time: string;
   is_extended: boolean;
   extension_until?: string | null;
   server_time_ist: string;
+}
+
+export interface CompanyRegisterPayload {
+  company_name: string;
+  legal_name?: string;
+  full_name: string;
+  email: string;
+  phone: string;
+  password: string;
+  city?: string;
+  state?: string;
+}
+
+export interface CompanyResponse {
+  id: number;
+  code: string;
+  name: string;
+  legal_name?: string | null;
+  owner_admin_id?: number | null;
+  city?: string | null;
+  state?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  status: string;
+  created_at: string;
 }
 
 export interface AuditLogItem {
@@ -391,11 +425,11 @@ export class ApiClient {
   }
 
   // Auth Endpoints
-  async login(identifier: string, password: string): Promise<LoginResponse> {
+  async login(identifier: string, password: string, company_name?: string): Promise<LoginResponse> {
     const response = await fetch(`${this.baseUrl}/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ identifier, password }),
+      body: JSON.stringify({ identifier, password, company_name }),
     });
 
     const data = await response.json();
@@ -408,6 +442,60 @@ export class ApiClient {
       throw error;
     }
     return data as LoginResponse;
+  }
+
+  async registerCompany(payload: CompanyRegisterPayload): Promise<LoginResponse> {
+    const response = await fetch(`${this.baseUrl}/auth/register-company`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      const errorMsg = data.detail?.message || data.detail || 'Company registration failed';
+      const code = data.detail?.code || 'REGISTER_ERROR';
+      const error = new Error(errorMsg);
+      (error as any).code = code;
+      (error as any).status = response.status;
+      throw error;
+    }
+    return data as LoginResponse;
+  }
+
+  async getMyCompany(): Promise<CompanyResponse> {
+    const response = await fetch(`${this.baseUrl}/company/my-company`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      await this.handleResponseError(response, 'Failed to fetch company profile');
+    }
+    return await response.json();
+  }
+
+  async getCompanyAdmins(): Promise<UserProfile[]> {
+    const response = await fetch(`${this.baseUrl}/company/admins`, {
+      headers: this.getAuthHeaders(),
+    });
+    if (!response.ok) {
+      await this.handleResponseError(response, 'Failed to fetch company admins');
+    }
+    return await response.json();
+  }
+
+  async createCompanyAdmin(payload: { email: string; phone?: string; full_name: string; password: string }): Promise<UserProfile> {
+    const response = await fetch(`${this.baseUrl}/company/admins`, {
+      method: 'POST',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      await this.handleResponseError(response, 'Failed to create company admin');
+    }
+    return await response.json();
   }
 
   async logout(): Promise<void> {

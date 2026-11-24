@@ -8,6 +8,7 @@ class MoneyTransaction(Base):
     __tablename__ = "money_transactions"
 
     id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, default=1, nullable=False, index=True)
     transaction_code = Column(String(50), unique=True, index=True, nullable=False)  # FIN-YYYYMMDD-XXXX
     worker_id = Column(Integer, ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)
     distribution_id = Column(Integer, ForeignKey("work_distributions.id", ondelete="SET NULL"), nullable=True)

@@ -8,6 +8,7 @@ class MaterialLedgerEntry(Base):
     __tablename__ = "material_ledger_entries"
 
     id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, default=1, nullable=False, index=True)
     worker_id = Column(Integer, ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)
     lot_number = Column(String(50), nullable=True, index=True)
     material_type = Column(String(100), nullable=False)  # e.g., "Gajji Silk Saree Fabric", "White Cotton Voile", "Nylon Tying Thread"

@@ -8,6 +8,7 @@ class WorkDistribution(Base):
     __tablename__ = "work_distributions"
 
     id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, default=1, nullable=False, index=True)
     batch_code = Column(String(50), index=True, nullable=False)
     worker_id = Column(Integer, ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)
     item_id = Column(Integer, ForeignKey("items.id", ondelete="SET NULL"), nullable=True, index=True)

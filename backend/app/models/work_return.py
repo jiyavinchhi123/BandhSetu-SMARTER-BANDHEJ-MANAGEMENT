@@ -8,6 +8,7 @@ class WorkReturn(Base):
     __tablename__ = "work_returns"
 
     id = Column(Integer, primary_key=True, index=True)
+    business_id = Column(Integer, default=1, nullable=False, index=True)
     return_code = Column(String(50), unique=True, index=True, nullable=False)  # RET-YYYYMMDD-XXXX
     distribution_id = Column(Integer, ForeignKey("work_distributions.id", ondelete="CASCADE"), nullable=False, index=True)
     worker_id = Column(Integer, ForeignKey("workers.id", ondelete="CASCADE"), nullable=False, index=True)

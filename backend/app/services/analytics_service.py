@@ -54,9 +54,9 @@ class AnalyticsService:
         return start_date, end_date
 
     @staticmethod
-    def get_dashboard_metrics(db: Session) -> DashboardMetricsResponse:
+    def get_dashboard_metrics(db: Session, business_id: Optional[int] = None) -> DashboardMetricsResponse:
         """
-        Computes the 10 Core Business Dashboard Metrics:
+        Computes the 10 Core Business Dashboard Metrics scoped to a business:
         1. Total Registered Women
         2. Active Women
         3. Total Pieces Given
@@ -69,43 +69,56 @@ class AnalyticsService:
         10. Total Outstanding Payable
         Plus 7-day trend charts and recent activity log.
         """
-        cache_key = "dashboard:metrics"
+        cache_key = f"dashboard:metrics:{business_id or 'all'}"
         cached_result = cache.get(cache_key)
         if cached_result is not None:
             return cached_result
 
+        w_q = db.query(Worker)
+        w_act_q = db.query(Worker).filter(Worker.status == "Active")
+        d_q = db.query(WorkDistribution)
+        r_q = db.query(WorkReturn)
+        m_q = db.query(MoneyTransaction)
+
+        if business_id is not None:
+            w_q = w_q.filter(Worker.business_id == business_id)
+            w_act_q = w_act_q.filter(Worker.business_id == business_id)
+            d_q = d_q.filter(WorkDistribution.business_id == business_id)
+            r_q = r_q.filter(WorkReturn.business_id == business_id)
+            m_q = m_q.filter(MoneyTransaction.business_id == business_id)
+
         # 1 & 2. Artisan Worker counts
-        total_registered = db.query(Worker).count()
-        active_women = db.query(Worker).filter(Worker.status == "Active").count()
+        total_registered = w_q.count()
+        active_women = w_act_q.count()
 
         # 3, 4 & 5. Pieces metrics from WorkDistribution
-        pieces_given = db.query(func.coalesce(func.sum(WorkDistribution.quantity_issued), 0)).scalar()
-        pieces_received = db.query(func.coalesce(func.sum(WorkDistribution.quantity_returned), 0)).scalar()
-        pieces_pending = db.query(func.coalesce(func.sum(WorkDistribution.quantity_pending), 0)).scalar()
+        pieces_given = d_q.with_entities(func.coalesce(func.sum(WorkDistribution.quantity_issued), 0)).scalar()
+        pieces_received = d_q.with_entities(func.coalesce(func.sum(WorkDistribution.quantity_returned), 0)).scalar()
+        pieces_pending = d_q.with_entities(func.coalesce(func.sum(WorkDistribution.quantity_pending), 0)).scalar()
 
         # 6. Total Accepted Work Value from WorkReturn
-        accepted_value = db.query(func.coalesce(func.sum(WorkReturn.completed_work_value), 0.0)).scalar()
+        accepted_value = r_q.with_entities(func.coalesce(func.sum(WorkReturn.completed_work_value), 0.0)).scalar()
 
         # 7. Total Wages Earned from MoneyTransaction (Credits)
-        wages_earned = db.query(func.coalesce(func.sum(MoneyTransaction.credit_amount), 0.0)).filter(
+        wages_earned = m_q.filter(
             MoneyTransaction.is_reversed == False,
             MoneyTransaction.transaction_type.in_(["WORK_EARNING", "BONUS_CREDIT"])
-        ).scalar()
+        ).with_entities(func.coalesce(func.sum(MoneyTransaction.credit_amount), 0.0)).scalar()
 
         # 8. Total Advances from MoneyTransaction
-        total_advances = db.query(func.coalesce(func.sum(MoneyTransaction.debit_amount), 0.0)).filter(
+        total_advances = m_q.filter(
             MoneyTransaction.is_reversed == False,
             MoneyTransaction.transaction_type == "ADVANCE_GIVEN"
-        ).scalar()
+        ).with_entities(func.coalesce(func.sum(MoneyTransaction.debit_amount), 0.0)).scalar()
 
         # 9. Total Payments from MoneyTransaction
-        total_payments = db.query(func.coalesce(func.sum(MoneyTransaction.debit_amount), 0.0)).filter(
+        total_payments = m_q.filter(
             MoneyTransaction.is_reversed == False,
             MoneyTransaction.transaction_type == "WAGE_PAYOUT"
-        ).scalar()
+        ).with_entities(func.coalesce(func.sum(MoneyTransaction.debit_amount), 0.0)).scalar()
 
         # 10. Total Outstanding Payable from Worker balances
-        total_outstanding = db.query(func.coalesce(func.sum(Worker.payable_balance), 0.0)).scalar()
+        total_outstanding = w_q.with_entities(func.coalesce(func.sum(Worker.payable_balance), 0.0)).scalar()
 
         # --- 7-Day Trend Analytics ---
         today = date.today()
@@ -114,25 +127,32 @@ class AnalyticsService:
             cur_date = today - timedelta(days=i)
             cur_str = cur_date.strftime("%d %b")
 
-            day_given = db.query(func.coalesce(func.sum(WorkDistribution.quantity_issued), 0)).filter(
+            dg_q = db.query(func.coalesce(func.sum(WorkDistribution.quantity_issued), 0)).filter(
                 WorkDistribution.issue_date == cur_date
-            ).scalar()
-
-            day_received = db.query(func.coalesce(func.sum(WorkReturn.quantity_returned), 0)).filter(
+            )
+            dr_q = db.query(func.coalesce(func.sum(WorkReturn.quantity_returned), 0)).filter(
                 WorkReturn.return_date == cur_date
-            ).scalar()
-
-            day_wages = db.query(func.coalesce(func.sum(MoneyTransaction.credit_amount), 0.0)).filter(
+            )
+            dw_q = db.query(func.coalesce(func.sum(MoneyTransaction.credit_amount), 0.0)).filter(
                 MoneyTransaction.is_reversed == False,
                 MoneyTransaction.transaction_type == "WORK_EARNING",
                 MoneyTransaction.transaction_date == cur_date
-            ).scalar()
-
-            day_payouts = db.query(func.coalesce(func.sum(MoneyTransaction.debit_amount), 0.0)).filter(
+            )
+            dp_q = db.query(func.coalesce(func.sum(MoneyTransaction.debit_amount), 0.0)).filter(
                 MoneyTransaction.is_reversed == False,
                 MoneyTransaction.transaction_type.in_(["WAGE_PAYOUT", "ADVANCE_GIVEN"]),
                 MoneyTransaction.transaction_date == cur_date
-            ).scalar()
+            )
+            if business_id is not None:
+                dg_q = dg_q.filter(WorkDistribution.business_id == business_id)
+                dr_q = dr_q.filter(WorkReturn.business_id == business_id)
+                dw_q = dw_q.filter(MoneyTransaction.business_id == business_id)
+                dp_q = dp_q.filter(MoneyTransaction.business_id == business_id)
+
+            day_given = dg_q.scalar()
+            day_received = dr_q.scalar()
+            day_wages = dw_q.scalar()
+            day_payouts = dp_q.scalar()
 
             trends.append(
                 TrendDataPoint(
@@ -148,7 +168,10 @@ class AnalyticsService:
         recent_activity: List[RecentActivityItem] = []
 
         # Latest returns
-        latest_returns = db.query(WorkReturn).order_by(desc(WorkReturn.created_at)).limit(4).all()
+        ret_q = db.query(WorkReturn)
+        if business_id is not None:
+            ret_q = ret_q.filter(WorkReturn.business_id == business_id)
+        latest_returns = ret_q.order_by(desc(WorkReturn.created_at)).limit(4).all()
         for r in latest_returns:
             w_name = r.worker.full_name if r.worker else "Artisan"
             recent_activity.append(
@@ -165,7 +188,10 @@ class AnalyticsService:
             )
 
         # Latest distributions
-        latest_dists = db.query(WorkDistribution).order_by(desc(WorkDistribution.created_at)).limit(4).all()
+        dist_q = db.query(WorkDistribution)
+        if business_id is not None:
+            dist_q = dist_q.filter(WorkDistribution.business_id == business_id)
+        latest_dists = dist_q.order_by(desc(WorkDistribution.created_at)).limit(4).all()
         for d in latest_dists:
             w_name = d.worker.full_name if d.worker else "Artisan"
             recent_activity.append(
@@ -182,9 +208,12 @@ class AnalyticsService:
             )
 
         # Latest financial transactions
-        latest_money = db.query(MoneyTransaction).filter(
+        mon_q = db.query(MoneyTransaction).filter(
             MoneyTransaction.transaction_type.in_(["ADVANCE_GIVEN", "WAGE_PAYOUT"])
-        ).order_by(desc(MoneyTransaction.created_at)).limit(4).all()
+        )
+        if business_id is not None:
+            mon_q = mon_q.filter(MoneyTransaction.business_id == business_id)
+        latest_money = mon_q.order_by(desc(MoneyTransaction.created_at)).limit(4).all()
         for m in latest_money:
             w_name = m.worker.full_name if m.worker else "Artisan"
             cat = "ADVANCE" if m.transaction_type == "ADVANCE_GIVEN" else "PAYOUT"
@@ -232,6 +261,7 @@ class AnalyticsService:
         worker_id: Optional[int] = None,
         item_id: Optional[int] = None,
         search_query: Optional[str] = None,
+        business_id: Optional[int] = None,
     ) -> ReportResponse:
         """
         Generates structured data for all 10 reports required by Step 6:
@@ -971,6 +1001,7 @@ class AnalyticsService:
         q: Optional[str] = None,
         town: Optional[str] = None,
         item_name: Optional[str] = None,
+        business_id: Optional[int] = None,
     ) -> PendingWorkReportResponse:
         """
         Artisan Pending Work & Non-Submission Report.
@@ -1002,6 +1033,8 @@ class AnalyticsService:
 
         # 2. Query WorkDistributions issued within [resolved_start, resolved_end]
         query = db.query(WorkDistribution).join(Worker, WorkDistribution.worker_id == Worker.id)
+        if business_id is not None:
+            query = query.filter(WorkDistribution.business_id == business_id)
         query = query.filter(
             WorkDistribution.issue_date >= resolved_start,
             WorkDistribution.issue_date <= resolved_end

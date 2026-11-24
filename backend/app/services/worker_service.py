@@ -49,14 +49,16 @@ class WorkerService:
         city_filter: Optional[Any] = None,
         village_filter: Optional[Any] = None,
         limit: int = 100,
-        offset: int = 0
+        offset: int = 0,
+        business_id: Optional[int] = None
     ) -> Tuple[List[Worker], int]:
         """
         Dynamic search with partial matching on Serial Number, Full Name,
-        Mobile Number, Town, City, and Village.
-        Typing "R" matches "Rekha", "Ranjan", "Rupal", etc.
+        Mobile Number, Town, City, and Village. Scoped strictly by business_id.
         """
         query = db.query(Worker)
+        if business_id is not None:
+            query = query.filter(Worker.business_id == business_id)
 
         if q and isinstance(q, str) and q.strip():
             term = f"%{q.strip().lower()}%"
@@ -90,11 +92,12 @@ class WorkerService:
         return workers, total
 
     @classmethod
-    def create_worker(cls, db: Session, data: WorkerCreate) -> Worker:
-        """Registers a new woman artisan with a guaranteed unique serial number."""
+    def create_worker(cls, db: Session, data: WorkerCreate, business_id: int = 1) -> Worker:
+        """Registers a new woman artisan with a guaranteed unique serial number for the business."""
         serial_num = cls.generate_next_serial_number(db)
 
         worker = Worker(
+            business_id=business_id,
             serial_number=serial_num,
             full_name=data.full_name.strip(),
             phone=data.phone.strip(),
@@ -143,6 +146,7 @@ class WorkerService:
         batch_code = f"BAT-{date.today().year}-{batch_count:04d}"
 
         distribution = WorkDistribution(
+            business_id=worker.business_id or 1,
             batch_code=batch_code,
             worker_id=worker.id,
             item_id=item.id,
@@ -166,6 +170,7 @@ class WorkerService:
 
         # Also create initial Material Ledger entry for the raw fabric pieces
         mat_entry = MaterialLedgerEntry(
+            business_id=worker.business_id or 1,
             worker_id=worker.id,
             lot_number=batch_code,
             material_type=f"{item.item_name} (Raw Fabric)",
@@ -200,6 +205,7 @@ class WorkerService:
             raise HTTPException(status_code=404, detail="Worker not found.")
 
         payment = PaymentRecord(
+            business_id=worker.business_id or 1,
             worker_id=worker.id,
             payment_type=data.payment_type,
             amount=data.amount,
