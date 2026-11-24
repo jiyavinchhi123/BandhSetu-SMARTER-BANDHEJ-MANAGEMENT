@@ -103,11 +103,19 @@ def update_item(
     if not item:
         raise HTTPException(status_code=404, detail="Item not found.")
 
-    update_dict = data.model_dump(exclude_unset=True)
+    # Concurrency control: Optimistic locking version check
+    if data.expected_version is not None and (item.version or 1) != data.expected_version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflict: This catalogue item was modified by another user concurrently. Please refresh to load the latest data."
+        )
+
+    update_dict = data.model_dump(exclude_unset=True, exclude={"expected_version"})
     for key, value in update_dict.items():
         if value is not None:
             setattr(item, key, value.strip() if isinstance(value, str) else value)
 
+    item.version = (item.version or 1) + 1
     db.commit()
     db.refresh(item)
     return item

@@ -108,11 +108,19 @@ def update_worker_profile(
     if not worker:
         raise HTTPException(status_code=404, detail="Worker not found.")
 
-    update_dict = data.model_dump(exclude_unset=True)
+    # Concurrency control: Optimistic locking version check
+    if data.expected_version is not None and (worker.version or 1) != data.expected_version:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Conflict: This artisan record was modified by another user concurrently. Please refresh to load the latest data."
+        )
+
+    update_dict = data.model_dump(exclude_unset=True, exclude={"expected_version"})
     for key, value in update_dict.items():
         if value is not None:
             setattr(worker, key, value.strip() if isinstance(value, str) else value)
 
+    worker.version = (worker.version or 1) + 1
     db.commit()
     db.refresh(worker)
     return worker

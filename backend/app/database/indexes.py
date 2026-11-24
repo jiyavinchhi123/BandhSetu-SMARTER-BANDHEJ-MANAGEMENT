@@ -46,12 +46,35 @@ INDEX_DEFINITIONS = [
 ]
 
 
+def ensure_version_columns(engine: Engine) -> int:
+    """
+    Idempotently ensures the 'version' column exists on core entities
+    for optimistic locking and concurrent conflict detection without data loss.
+    """
+    applied = 0
+    with engine.connect() as conn:
+        for tbl in ["workers", "work_distributions", "items"]:
+            try:
+                conn.execute(text(f"ALTER TABLE {tbl} ADD COLUMN version INTEGER NOT NULL DEFAULT 1;"))
+                conn.commit()
+                applied += 1
+            except Exception:
+                pass  # Column already exists or already migrated
+    return applied
+
+
 def ensure_database_indexes(engine: Engine) -> int:
     """
     Idempotently creates high-performance composite indexes across core tables.
     Safe to run repeatedly on SQLite and PostgreSQL.
     Returns the count of indexes processed.
     """
+    # 1. Ensure optimistic locking version columns
+    try:
+        ensure_version_columns(engine)
+    except Exception as e:
+        logger.debug(f"Version column check notice: {e}")
+
     applied = 0
     with engine.connect() as conn:
         for idx_sql in INDEX_DEFINITIONS:

@@ -73,6 +73,7 @@ class WorkDistributionResponse(BaseModel):
     status: str
     qc_remarks: Optional[str] = None
     remarks: Optional[str] = None
+    version: int = 1
     created_at: datetime
 
     # Additional joined worker fields for convenience in UI tables

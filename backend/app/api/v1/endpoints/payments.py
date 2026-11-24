@@ -2,13 +2,14 @@ from typing import Optional, Annotated
 from datetime import date
 from io import StringIO
 import csv
-from fastapi import APIRouter, Depends, Query, Path, status, Response
+from fastapi import APIRouter, Depends, Query, Path, status, Response, Request, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
 from app.models.user import User
 from app.api.deps import get_current_user, require_admin
 from app.services.payment_service import PaymentService
+from app.core.idempotency import idempotency_engine
 from app.schemas.payment import (
     AdvanceCreateRequest,
     PayoutCreateRequest,
@@ -28,6 +29,8 @@ router = APIRouter()
 )
 def record_advance(
     data: AdvanceCreateRequest,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -35,14 +38,36 @@ def record_advance(
     Records an advance / withdrawal taken by an artisan:
     - Worker-Account Perspective: DEBITs the worker's money ledger
     - Decrements the worker's payable balance
-    - Prevents duplicate payments and duplicate reference numbers
+    - Prevents duplicate payments and duplicate reference numbers via Idempotency Engine
     """
-    return PaymentService.record_advance(
-        db=db,
-        data=data,
-        user_id=current_user.id,
-        user_name=current_user.full_name,
-    )
+    idem_key = request.headers.get("Idempotency-Key") or request.headers.get("X-Idempotency-Key")
+    if not idem_key:
+        ref_part = (data.reference_no or "").strip()
+        raw_sig = f"adv:{data.worker_id}:{data.amount}:{data.payment_mode}:{ref_part}"
+        idem_key = f"idem:{current_user.id}:{raw_sig}"
+
+    state, replay = idempotency_engine.check_and_acquire(idem_key)
+    if state == "IN_PROGRESS":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A payment request with these exact details is already currently processing. Please wait."
+        )
+    if state == "REPLAY":
+        response.headers["X-Idempotent-Replay"] = "true"
+        return replay[1]
+
+    try:
+        result = PaymentService.record_advance(
+            db=db,
+            data=data,
+            user_id=current_user.id,
+            user_name=current_user.full_name,
+        )
+        idempotency_engine.record_success(idem_key, 201, result)
+        return result
+    except Exception:
+        idempotency_engine.release_key(idem_key)
+        raise
 
 
 @router.post(
@@ -53,6 +78,8 @@ def record_advance(
 )
 def record_payout(
     data: PayoutCreateRequest,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -61,14 +88,36 @@ def record_payout(
     - Worker-Account Perspective: DEBITs the worker's money ledger
     - Decrements the worker's payable balance
     - Supports full settlement flag
-    - Prevents duplicate payments
+    - Prevents duplicate payments via Idempotency Engine
     """
-    return PaymentService.record_payout(
-        db=db,
-        data=data,
-        user_id=current_user.id,
-        user_name=current_user.full_name,
-    )
+    idem_key = request.headers.get("Idempotency-Key") or request.headers.get("X-Idempotency-Key")
+    if not idem_key:
+        ref_part = (data.reference_no or "").strip()
+        raw_sig = f"pay:{data.worker_id}:{data.amount}:{data.payment_mode}:{data.is_full_settlement}:{ref_part}"
+        idem_key = f"idem:{current_user.id}:{raw_sig}"
+
+    state, replay = idempotency_engine.check_and_acquire(idem_key)
+    if state == "IN_PROGRESS":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A payout request with these exact details is already currently processing. Please wait."
+        )
+    if state == "REPLAY":
+        response.headers["X-Idempotent-Replay"] = "true"
+        return replay[1]
+
+    try:
+        result = PaymentService.record_payout(
+            db=db,
+            data=data,
+            user_id=current_user.id,
+            user_name=current_user.full_name,
+        )
+        idempotency_engine.record_success(idem_key, 201, result)
+        return result
+    except Exception:
+        idempotency_engine.release_key(idem_key)
+        raise
 
 
 @router.get(

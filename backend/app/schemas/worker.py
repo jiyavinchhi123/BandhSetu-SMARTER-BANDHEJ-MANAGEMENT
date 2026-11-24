@@ -29,6 +29,7 @@ class WorkerUpdate(BaseModel):
     village: Optional[str] = None
     status: Optional[str] = None
     remarks: Optional[str] = None
+    expected_version: Optional[int] = None  # Optimistic concurrency check
 
 
 class WorkerResponse(WorkerBase):
@@ -37,6 +38,7 @@ class WorkerResponse(WorkerBase):
     pending_pieces: int = 0
     payable_balance: float = 0.0
     total_earned: float = 0.0
+    version: int = 1
     created_at: datetime
     updated_at: datetime
 

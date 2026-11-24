@@ -1,11 +1,12 @@
 from typing import List, Optional, Annotated
-from fastapi import APIRouter, Depends, Query, Path, status
+from fastapi import APIRouter, Depends, Query, Path, status, Request, Response, HTTPException
 from sqlalchemy.orm import Session
 
 from app.database.session import get_db
 from app.models.user import User
 from app.api.deps import get_current_user, require_admin
 from app.services.distribution_service import DistributionService
+from app.core.idempotency import idempotency_engine
 from app.schemas.distribution import (
     WorkDistributionCreate,
     WorkDistributionResponse,
@@ -27,6 +28,8 @@ router = APIRouter()
 )
 def give_work(
     data: WorkDistributionCreate,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -37,13 +40,35 @@ def give_work(
     - Generates unique transaction ID (DIST-YYYYMMDD-XXXX)
     - Posts DEBIT entry to the Material Debit-Credit Ledger
     - Increments artisan pending pieces
+    - Protected by Idempotency Engine against simultaneous double submissions
     """
-    return DistributionService.give_work(
-        db=db,
-        data=data,
-        user_id=current_user.id,
-        user_name=current_user.full_name,
-    )
+    idem_key = request.headers.get("Idempotency-Key") or request.headers.get("X-Idempotency-Key")
+    if not idem_key:
+        raw_sig = f"give:{data.worker_id}:{data.item_id}:{data.quantity_issued}:{data.knot_style}"
+        idem_key = f"idem:{current_user.id}:{raw_sig}"
+
+    state, replay = idempotency_engine.check_and_acquire(idem_key)
+    if state == "IN_PROGRESS":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A work consignment with these exact details is already currently processing. Please wait."
+        )
+    if state == "REPLAY":
+        response.headers["X-Idempotent-Replay"] = "true"
+        return replay[1]
+
+    try:
+        result = DistributionService.give_work(
+            db=db,
+            data=data,
+            user_id=current_user.id,
+            user_name=current_user.full_name,
+        )
+        idempotency_engine.record_success(idem_key, 201, result)
+        return result
+    except Exception:
+        idempotency_engine.release_key(idem_key)
+        raise
 
 
 @router.post(
@@ -54,6 +79,8 @@ def give_work(
 )
 def receive_work(
     data: WorkReturnCreate,
+    request: Request,
+    response: Response,
     db: Session = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
@@ -64,13 +91,35 @@ def receive_work(
     - Prevents returning more than pending quantity or negative numbers
     - Posts CREDIT entry to the Material Debit-Credit Ledger
     - Decrements artisan pending pieces and credits payable balance
+    - Protected by Idempotency Engine against double submissions
     """
-    return DistributionService.receive_work(
-        db=db,
-        data=data,
-        user_id=current_user.id,
-        user_name=current_user.full_name,
-    )
+    idem_key = request.headers.get("Idempotency-Key") or request.headers.get("X-Idempotency-Key")
+    if not idem_key:
+        raw_sig = f"ret:{data.distribution_id}:{data.quantity_returned}:{data.quantity_rejected}"
+        idem_key = f"idem:{current_user.id}:{raw_sig}"
+
+    state, replay = idempotency_engine.check_and_acquire(idem_key)
+    if state == "IN_PROGRESS":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="A return receipt with these exact details is already currently processing. Please wait."
+        )
+    if state == "REPLAY":
+        response.headers["X-Idempotent-Replay"] = "true"
+        return replay[1]
+
+    try:
+        result = DistributionService.receive_work(
+            db=db,
+            data=data,
+            user_id=current_user.id,
+            user_name=current_user.full_name,
+        )
+        idempotency_engine.record_success(idem_key, 201, result)
+        return result
+    except Exception:
+        idempotency_engine.release_key(idem_key)
+        raise
 
 
 @router.get(

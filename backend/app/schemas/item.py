@@ -27,10 +27,12 @@ class ItemUpdate(BaseModel):
     price_per_piece: Optional[float] = None
     description: Optional[str] = None
     is_active: Optional[bool] = None
+    expected_version: Optional[int] = None
 
 
 class ItemResponse(ItemBase):
     id: int
+    version: int = 1
     created_at: datetime
     updated_at: datetime
 

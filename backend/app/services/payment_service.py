@@ -82,7 +82,7 @@ class PaymentService:
         Records cash or digital advance taken by worker.
         Worker-Account Perspective: DEBITS the worker's money account and reduces payable balance.
         """
-        worker = db.query(Worker).filter(Worker.id == data.worker_id).first()
+        worker = db.query(Worker).filter(Worker.id == data.worker_id).with_for_update().first()
         if not worker:
             raise HTTPException(status_code=404, detail=f"Worker #{data.worker_id} not found.")
 
@@ -117,8 +117,14 @@ class PaymentService:
                 db.add(payment)
                 db.flush()
 
-                # 2. Update Worker Payable Balance (Advance reduces balance)
-                worker.payable_balance = round(float(worker.payable_balance) - data.amount, 2)
+                # 2. Atomic Update Worker Payable Balance on DB engine level (Advance reduces balance)
+                db.query(Worker).filter(Worker.id == worker.id).update(
+                    {
+                        Worker.payable_balance: Worker.payable_balance - data.amount,
+                        Worker.version: Worker.version + 1,
+                    },
+                    synchronize_session="fetch"
+                )
 
                 # 3. Create MoneyTransaction (DEBIT: Worker takes cash/money)
                 txn_code = PaymentService.generate_money_txn_code(db)
@@ -172,7 +178,7 @@ class PaymentService:
         Records wage payout (partial payment or full settlement).
         Worker-Account Perspective: DEBITS the worker's money account and reduces payable balance.
         """
-        worker = db.query(Worker).filter(Worker.id == data.worker_id).first()
+        worker = db.query(Worker).filter(Worker.id == data.worker_id).with_for_update().first()
         if not worker:
             raise HTTPException(status_code=404, detail=f"Worker #{data.worker_id} not found.")
 
@@ -211,8 +217,14 @@ class PaymentService:
                 db.add(payment)
                 db.flush()
 
-                # 2. Update Worker Payable Balance
-                worker.payable_balance = round(float(worker.payable_balance) - payout_amount, 2)
+                # 2. Atomic Update Worker Payable Balance on DB engine level
+                db.query(Worker).filter(Worker.id == worker.id).update(
+                    {
+                        Worker.payable_balance: Worker.payable_balance - payout_amount,
+                        Worker.version: Worker.version + 1,
+                    },
+                    synchronize_session="fetch"
+                )
 
                 # 3. Create MoneyTransaction (DEBIT: Money paid to worker)
                 txn_code = PaymentService.generate_money_txn_code(db)

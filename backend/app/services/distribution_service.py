@@ -75,7 +75,7 @@ class DistributionService:
         Gives work consignment to worker with HISTORICAL PRICE SNAPSHOT.
         Posts a DEBIT entry to the Material Debit-Credit Ledger (worker-account perspective).
         """
-        worker = db.query(Worker).filter(Worker.id == data.worker_id).first()
+        worker = db.query(Worker).filter(Worker.id == data.worker_id).with_for_update().first()
         if not worker:
             raise HTTPException(status_code=404, detail=f"Worker #{data.worker_id} not found.")
 
@@ -159,8 +159,14 @@ class DistributionService:
                 )
                 db.add(mat_entry)
 
-                # 4. Update Worker live counters
-                worker.pending_pieces = new_running_balance
+                # 4. Atomic Update Worker live counters on DB engine level
+                db.query(Worker).filter(Worker.id == worker.id).update(
+                    {
+                        Worker.pending_pieces: Worker.pending_pieces + data.quantity_issued,
+                        Worker.version: Worker.version + 1,
+                    },
+                    synchronize_session="fetch"
+                )
 
                 # 5. Audit Log
                 audit = AuditLog(
@@ -194,11 +200,11 @@ class DistributionService:
         """
         distribution = db.query(WorkDistribution).filter(
             WorkDistribution.id == data.distribution_id
-        ).first()
+        ).with_for_update().first()
         if not distribution:
             raise HTTPException(status_code=404, detail="Work distribution record not found.")
 
-        worker = db.query(Worker).filter(Worker.id == distribution.worker_id).first()
+        worker = db.query(Worker).filter(Worker.id == distribution.worker_id).with_for_update().first()
         if not worker:
             raise HTTPException(status_code=404, detail="Worker associated with distribution not found.")
 
@@ -265,11 +271,18 @@ class DistributionService:
                 else:
                     distribution.status = "Partially Returned"
                 distribution.return_date = ret_date
+                distribution.version = (distribution.version or 1) + 1
 
-                # 3. Update Worker counters
-                worker.pending_pieces = max(0, int(worker.pending_pieces) - total_returning)
-                worker.payable_balance = float(worker.payable_balance) + earned_wage
-                worker.total_earned = float(worker.total_earned) + earned_wage
+                # 3. Atomic Update Worker counters on DB engine level
+                db.query(Worker).filter(Worker.id == worker.id).update(
+                    {
+                        Worker.pending_pieces: func.max(0, Worker.pending_pieces - total_returning),
+                        Worker.payable_balance: Worker.payable_balance + earned_wage,
+                        Worker.total_earned: Worker.total_earned + earned_wage,
+                        Worker.version: Worker.version + 1,
+                    },
+                    synchronize_session="fetch"
+                )
 
                 # 4. Worker Account Perspective: CREDIT entry (Material Received from Worker = Credit quantity)
                 mtxn_code = DistributionService.generate_material_txn_code(db)

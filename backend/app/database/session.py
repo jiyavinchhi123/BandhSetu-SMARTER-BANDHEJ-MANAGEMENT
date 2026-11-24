@@ -1,9 +1,13 @@
 import sqlite3
+import random
+import time
 import logging
+from functools import wraps
 from contextlib import contextmanager
-from typing import Generator
+from typing import Generator, Callable, Any
 from sqlalchemy import create_engine, event, text
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
+from sqlalchemy.exc import OperationalError as SAOperationalError
 from app.core.config import settings
 
 logger = logging.getLogger("bandhsetu.database")
@@ -107,6 +111,40 @@ def atomic_transaction(db: Session):
         except Exception:
             db.rollback()
             raise
+
+
+def with_db_retry(max_retries: int = 5, backoff_base: float = 0.05):
+    """
+    Decorator for concurrency-sensitive operations.
+    Catches transient SQLite locked/busy errors or DB connection timeouts,
+    and automatically retries with randomized jittered exponential backoff (e.g. 50ms, 100ms, 200ms).
+    Prevents thread starvation and deadlock crashes under heavy simultaneous traffic.
+    """
+    def decorator(func: Callable) -> Callable:
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            last_err = None
+            for attempt in range(1, max_retries + 1):
+                try:
+                    return func(*args, **kwargs)
+                except (sqlite3.OperationalError, SAOperationalError) as exc:
+                    err_str = str(exc).lower()
+                    if "locked" in err_str or "busy" in err_str or "timeout" in err_str:
+                        last_err = exc
+                        if attempt == max_retries:
+                            logger.error(f"DB concurrency max retries ({max_retries}) exhausted: {exc}")
+                            raise
+                        jitter = random.uniform(0.01, 0.05)
+                        sleep_s = (backoff_base * (2 ** (attempt - 1))) + jitter
+                        logger.warning(
+                            f"Database lock contention encountered. Backing off for {sleep_s:.3f}s (retry {attempt}/{max_retries})..."
+                        )
+                        time.sleep(sleep_s)
+                    else:
+                        raise
+            raise last_err
+        return wrapper
+    return decorator
 
 
 def verify_database_integrity(db: Session) -> dict:
