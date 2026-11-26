@@ -52,11 +52,20 @@ class CompanyResponse(BaseModel):
     name: str
     legal_name: Optional[str] = None
     owner_admin_id: Optional[int] = None
+    address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    gst_number: Optional[str] = None
     status: str = "Active"
+    suspension_reason: Optional[str] = None
+    suspended_at: Optional[datetime] = None
+    operating_hours_start: Optional[str] = "08:00"
+    operating_hours_end: Optional[str] = "20:00"
+    operating_days: Optional[str] = "Mon,Tue,Wed,Thu,Fri,Sat"
+    allow_manager_weekend_access: bool = False
+    is_deleted: bool = False
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
@@ -69,6 +78,25 @@ class CompanyUpdateRequest(BaseModel):
     state: Optional[str] = None
     phone: Optional[str] = None
     email: Optional[str] = None
+    gst_number: Optional[str] = None
+    operating_hours_start: Optional[str] = None
+    operating_hours_end: Optional[str] = None
+    operating_days: Optional[str] = None
+    allow_manager_weekend_access: Optional[bool] = None
+
+
+class CompanySuspendRequest(BaseModel):
+    reason: str = Field(..., min_length=3, description="Detailed reason for suspending the company")
+    password: str = Field(..., min_length=4, description="Primary Admin password for re-authentication")
+
+
+class CompanyReactivateRequest(BaseModel):
+    password: str = Field(..., min_length=4, description="Primary Admin password for re-authentication")
+
+
+class CompanyDeleteRequest(BaseModel):
+    confirmation_phrase: str = Field(..., description="Must match 'DELETE <company_code>' or 'DELETE <company_name>'")
+    password: str = Field(..., min_length=4, description="Primary Admin password for re-authentication")
 
 
 class UserResponse(BaseModel):

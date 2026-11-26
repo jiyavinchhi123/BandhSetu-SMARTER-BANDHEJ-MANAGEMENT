@@ -84,11 +84,20 @@ export interface CompanyResponse {
   name: string;
   legal_name?: string | null;
   owner_admin_id?: number | null;
+  address?: string | null;
   city?: string | null;
   state?: string | null;
   phone?: string | null;
   email?: string | null;
+  gst_number?: string | null;
   status: string;
+  suspension_reason?: string | null;
+  suspended_at?: string | null;
+  operating_hours_start?: string;
+  operating_hours_end?: string;
+  operating_days?: string;
+  allow_manager_weekend_access?: boolean;
+  is_deleted?: boolean;
   created_at: string;
 }
 
@@ -469,6 +478,66 @@ export class ApiClient {
     });
     if (!response.ok) {
       await this.handleResponseError(response, 'Failed to fetch company profile');
+    }
+    return await response.json();
+  }
+
+  async updateMyCompany(payload: Partial<CompanyResponse>): Promise<CompanyResponse> {
+    const response = await fetch(`${this.baseUrl}/company/my-company`, {
+      method: 'PUT',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      await this.handleResponseError(response, 'Failed to update company settings');
+    }
+    return await response.json();
+  }
+
+  async suspendMyCompany(payload: { reason: string; password: string }): Promise<any> {
+    const response = await fetch(`${this.baseUrl}/company/my-company/suspend`, {
+      method: 'POST',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      await this.handleResponseError(response, 'Failed to suspend company operations');
+    }
+    return await response.json();
+  }
+
+  async reactivateMyCompany(payload: { password: string }): Promise<any> {
+    const response = await fetch(`${this.baseUrl}/company/my-company/reactivate`, {
+      method: 'POST',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      await this.handleResponseError(response, 'Failed to reactivate company');
+    }
+    return await response.json();
+  }
+
+  async deleteMyCompany(payload: { confirmation_phrase: string; password: string }): Promise<any> {
+    const response = await fetch(`${this.baseUrl}/company/my-company/delete`, {
+      method: 'POST',
+      headers: {
+        ...this.getAuthHeaders(),
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    });
+    if (!response.ok) {
+      await this.handleResponseError(response, 'Failed to authorize company deletion');
     }
     return await response.json();
   }

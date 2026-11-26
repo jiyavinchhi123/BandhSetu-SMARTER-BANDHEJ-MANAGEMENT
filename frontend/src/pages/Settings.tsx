@@ -14,16 +14,24 @@ import {
   Settings as SettingsIcon,
   Sparkles,
   ExternalLink,
+  Building2,
+  Clock,
+  Calendar,
+  AlertTriangle,
+  ShieldAlert,
+  Trash2,
+  PowerOff,
+  RefreshCw,
 } from 'lucide-react';
 import { Card, Button, Input } from '../components/ui';
 import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useToast } from '../hooks/useToast';
-import { api, SMTPConfigResponse } from '../services/api';
+import { api, SMTPConfigResponse, CompanyResponse } from '../services/api';
 import { SMTPConfigModal } from '../components/auth/SMTPConfigModal';
 
 export const Settings: React.FC = () => {
-  const { user, updateUserSession } = useAuth();
+  const { user, role, isPrimaryAdmin, updateUserSession, logout } = useAuth();
   const { t, language } = useLanguage();
   const { showToast } = useToast();
 
@@ -42,6 +50,29 @@ export const Settings: React.FC = () => {
   const [credentialError, setCredentialError] = useState<string | null>(null);
   const [credentialSuccess, setCredentialSuccess] = useState<string | null>(null);
 
+  // Company & Operational Settings State (Admin Only)
+  const [company, setCompany] = useState<CompanyResponse | null>(null);
+  const [legalName, setLegalName] = useState('');
+  const [gstNumber, setGstNumber] = useState('');
+  const [companyPhone, setCompanyPhone] = useState('');
+  const [companyEmail, setCompanyEmail] = useState('');
+  const [operatingStart, setOperatingStart] = useState('08:00');
+  const [operatingEnd, setOperatingEnd] = useState('20:00');
+  const [operatingDays, setOperatingDays] = useState('Mon,Tue,Wed,Thu,Fri,Sat');
+  const [allowWeekend, setAllowWeekend] = useState(false);
+  const [isUpdatingCompany, setIsUpdatingCompany] = useState(false);
+
+  // Suspension & Deletion Modals State
+  const [showSuspendModal, setShowSuspendModal] = useState(false);
+  const [suspendReason, setSuspendReason] = useState('');
+  const [suspendPassword, setSuspendPassword] = useState('');
+  const [isSuspending, setIsSuspending] = useState(false);
+
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [deleteConfirmationPhrase, setDeleteConfirmationPhrase] = useState('');
+  const [deletePassword, setDeletePassword] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
   // SMTP Settings State
   const [showSmtpModal, setShowSmtpModal] = useState(false);
   const [smtpStatus, setSmtpStatus] = useState<SMTPConfigResponse | null>(null);
@@ -54,9 +85,23 @@ export const Settings: React.FC = () => {
       setEmail(user.email || '');
     }
 
+    if (role === 'admin') {
+      api.getMyCompany().then((comp) => {
+        setCompany(comp);
+        setLegalName(comp.legal_name || '');
+        setGstNumber(comp.gst_number || '');
+        setCompanyPhone(comp.phone || '');
+        setCompanyEmail(comp.email || '');
+        setOperatingStart(comp.operating_hours_start || '08:00');
+        setOperatingEnd(comp.operating_hours_end || '20:00');
+        setOperatingDays(comp.operating_days || 'Mon,Tue,Wed,Thu,Fri,Sat');
+        setAllowWeekend(Boolean(comp.allow_manager_weekend_access));
+      }).catch(() => {});
+    }
+
     // Fetch SMTP status
     api.getSMTPConfig().then(setSmtpStatus).catch(() => {});
-  }, [user]);
+  }, [user, role]);
 
   // Handle Login Credentials Update
   const handleUpdateCredentials = async (e: React.FormEvent) => {
@@ -440,7 +485,7 @@ export const Settings: React.FC = () => {
         </div>
       </Card>
 
-      {/* Reusable SMTP Configuration Modal */}
+      {/* REUSABLE SMTP CONFIGURATION MODAL */}
       <SMTPConfigModal
         isOpen={showSmtpModal}
         onClose={() => setShowSmtpModal(false)}
@@ -456,6 +501,509 @@ export const Settings: React.FC = () => {
           });
         }}
       />
+
+      {/* -------------------------------------------------------------------- */}
+      {/* COMPANY PROTECTION, OPERATING HOURS & DISASTER RECOVERY CARD (ADMIN) */}
+      {/* -------------------------------------------------------------------- */}
+      {role === 'admin' && company && (
+        <Card className="p-6 sm:p-8 border-[#F0E1E1] rounded-3xl shadow-2xs space-y-6 bg-white">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-[#F0E1E1] pb-4 gap-3">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 rounded-2xl bg-[#FCEDEC] text-[#A20D38]">
+                <Building2 className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="font-serif text-lg font-bold text-[#30232A]">
+                    {company.name}
+                  </h2>
+                  <span className="font-mono text-xs font-bold bg-[#FCEDEC] text-[#A20D38] px-2.5 py-0.5 rounded-full border border-[#F0E1E1]">
+                    {company.code}
+                  </span>
+                  {isPrimaryAdmin && (
+                    <span className="text-[10px] font-bold bg-amber-50 text-amber-700 px-2 py-0.5 rounded-full border border-amber-200 inline-flex items-center gap-1">
+                      <ShieldCheck className="w-3 h-3 text-amber-600" />
+                      <span>{language === 'gu' ? 'મુખ્ય સંચાલક' : 'Primary Admin'}</span>
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  {language === 'gu'
+                    ? 'કંપની સ્તરની સુરક્ષા, કાર્યકારી કલાકો અને ડેટા અલગતા'
+                    : 'Company-Level Protection, Operating Hours & Data Isolation'}
+                </p>
+              </div>
+            </div>
+
+            <div>
+              {company.status === 'Suspended' ? (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-rose-50 text-rose-800 border border-rose-200">
+                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
+                  <span>Operations Suspended</span>
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-800 border border-emerald-200">
+                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Active & Verified</span>
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* Form: Company Operational Settings */}
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setIsUpdatingCompany(true);
+              try {
+                const updated = await api.updateMyCompany({
+                  legal_name: legalName,
+                  gst_number: gstNumber,
+                  phone: companyPhone,
+                  email: companyEmail,
+                  operating_hours_start: operatingStart,
+                  operating_hours_end: operatingEnd,
+                  operating_days: operatingDays,
+                  allow_manager_weekend_access: allowWeekend,
+                });
+                setCompany(updated);
+                showToast({
+                  type: 'success',
+                  title: language === 'gu' ? 'કંપની સેટિંગ્સ સાચવી' : 'Settings Saved',
+                  message:
+                    language === 'gu'
+                      ? 'કંપનીના કાર્યકારી નિયમો સફળતાપૂર્વક અપડેટ થયા.'
+                      : 'Company operational rules and settings updated successfully.',
+                });
+              } catch (err: any) {
+                showToast({
+                  type: 'error',
+                  title: 'Update Failed',
+                  message: err.message || 'Failed to update company settings.',
+                });
+              } finally {
+                setIsUpdatingCompany(false);
+              }
+            }}
+            className="space-y-4"
+          >
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <Input
+                  label={language === 'gu' ? 'કાયદેસરનું બિઝનેસ નામ' : 'Legal Business Name'}
+                  type="text"
+                  value={legalName}
+                  onChange={(e) => setLegalName(e.target.value)}
+                  placeholder="e.g. Vinchhi Bandhej Creations Pvt Ltd"
+                />
+              </div>
+
+              <div>
+                <Input
+                  label={language === 'gu' ? 'GST / ટેક્સ નંબર (જો હોય તો)' : 'GST / Tax Registration Number'}
+                  type="text"
+                  value={gstNumber}
+                  onChange={(e) => setGstNumber(e.target.value.toUpperCase())}
+                  placeholder="e.g. 24AAAAA0000A1Z5"
+                />
+              </div>
+
+              <div>
+                <Input
+                  label={language === 'gu' ? 'બિઝનેસ સંપર્ક નંબર' : 'Registered Business Phone'}
+                  type="text"
+                  value={companyPhone}
+                  onChange={(e) => setCompanyPhone(e.target.value)}
+                  placeholder="e.g. +91 98250 12345"
+                  leftIcon={<Phone className="w-4 h-4" />}
+                />
+              </div>
+
+              <div>
+                <Input
+                  label={language === 'gu' ? 'બિઝનેસ ઇમેઇલ' : 'Registered Business Email'}
+                  type="email"
+                  value={companyEmail}
+                  onChange={(e) => setCompanyEmail(e.target.value)}
+                  placeholder="e.g. contact@vinchhibandhej.com"
+                  leftIcon={<Mail className="w-4 h-4" />}
+                />
+              </div>
+            </div>
+
+            {/* Operational Rules (Operating Hours & Days) */}
+            <div className="p-4 rounded-2xl bg-[#FFF9F6] border border-[#F0E1E1] space-y-4">
+              <div className="flex items-center gap-2 text-xs font-bold text-[#A20D38] uppercase tracking-wider">
+                <Clock className="w-4 h-4" />
+                <span>
+                  {language === 'gu'
+                    ? 'વર્કશોપ કાર્યકારી કલાકો અને નિયમો (કંપની મુજબ)'
+                    : 'Workshop Operating Hours & Access Rules'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                <div>
+                  <label className="block text-slate-600 font-medium mb-1">
+                    {language === 'gu' ? 'શરૂ થવાનો સમય (IST)' : 'Daily Opening Time'}
+                  </label>
+                  <input
+                    type="time"
+                    value={operatingStart}
+                    onChange={(e) => setOperatingStart(e.target.value)}
+                    className="w-full px-3 py-2 bg-white rounded-xl border border-[#F0E1E1] text-[#30232A] font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-[#A20D38]/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-medium mb-1">
+                    {language === 'gu' ? 'બંધ થવાનો સમય (IST)' : 'Daily Closing Time'}
+                  </label>
+                  <input
+                    type="time"
+                    value={operatingEnd}
+                    onChange={(e) => setOperatingEnd(e.target.value)}
+                    className="w-full px-3 py-2 bg-white rounded-xl border border-[#F0E1E1] text-[#30232A] font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-[#A20D38]/20"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-slate-600 font-medium mb-1">
+                    {language === 'gu' ? 'કામકાજના દિવસો' : 'Working Days (Comma-separated)'}
+                  </label>
+                  <input
+                    type="text"
+                    value={operatingDays}
+                    onChange={(e) => setOperatingDays(e.target.value)}
+                    placeholder="Mon,Tue,Wed,Thu,Fri,Sat"
+                    className="w-full px-3 py-2 bg-white rounded-xl border border-[#F0E1E1] text-[#30232A] font-semibold text-xs focus:outline-none focus:ring-2 focus:ring-[#A20D38]/20"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1 text-xs">
+                <input
+                  type="checkbox"
+                  id="allowWeekendToggle"
+                  checked={allowWeekend}
+                  onChange={(e) => setAllowWeekend(e.target.checked)}
+                  className="w-4 h-4 rounded text-[#A20D38] border-gray-300 focus:ring-[#A20D38]"
+                />
+                <label htmlFor="allowWeekendToggle" className="text-slate-700 font-medium cursor-pointer">
+                  {language === 'gu'
+                    ? 'રવિવારે / વીકેન્ડમાં મેનેજરોને લોગિન કરવાની મંજૂરી આપો'
+                    : 'Allow workshop managers to access platform on weekends / off-days'}
+                </label>
+              </div>
+            </div>
+
+            <div className="flex justify-end pt-2">
+              <Button
+                type="submit"
+                variant="primary"
+                size="md"
+                isLoading={isUpdatingCompany}
+                icon={<Save className="w-4 h-4" />}
+              >
+                {language === 'gu' ? 'કંપની સેટિંગ્સ સાચવો' : 'Save Company Rules'}
+              </Button>
+            </div>
+          </form>
+
+          {/* Primary Admin Exclusive: Company Suspension & Danger Zone */}
+          {isPrimaryAdmin && (
+            <div className="pt-4 border-t border-rose-100 space-y-4">
+              <div className="flex items-center gap-2 text-xs font-bold text-rose-800 uppercase tracking-wider">
+                <ShieldAlert className="w-4 h-4 text-rose-600" />
+                <span>
+                  {language === 'gu' ? 'કંપની સંરક્ષણ અને સુરક્ષા નિયંત્રણ' : 'Company Protection & Danger Zone (Primary Admin Only)'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* Suspension Box */}
+                <div className="p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 flex flex-col justify-between gap-3 text-xs">
+                  <div>
+                    <h3 className="font-bold text-amber-900 text-sm">
+                      {company.status === 'Suspended'
+                        ? language === 'gu' ? 'કંપની સક્રિય કરો' : 'Reactivate Company Operations'
+                        : language === 'gu' ? 'કંપની કામકાજ સ્થગિત (Suspend) કરો' : 'Suspend Company Operations'}
+                    </h3>
+                    <p className="text-amber-800/80 mt-1 leading-relaxed">
+                      {language === 'gu'
+                        ? 'કંપની સસ્પેન્ડ કરવાથી બધા યુઝરો/મેનેજરોનું લોગિન બંધ થશે, પરંતુ ૧૦૦% તમામ ડેટા, કારીગરો અને હિસાબો સંપૂર્ણ સુરક્ષિત રહેશે.'
+                        : 'Blocks all active manager logins and halts operations while permanently preserving 100% of artisans, khatas, and transaction records.'}
+                    </p>
+                  </div>
+
+                  <div>
+                    {company.status === 'Suspended' ? (
+                      <Button
+                        type="button"
+                        variant="primary"
+                        size="sm"
+                        icon={<RefreshCw className="w-3.5 h-3.5" />}
+                        onClick={() => {
+                          setSuspendPassword('');
+                          setShowSuspendModal(true);
+                        }}
+                      >
+                        {language === 'gu' ? 'કંપની ફરી ચાલુ કરો' : 'Reactivate Company'}
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        className="border-amber-300 text-amber-800 hover:bg-amber-100"
+                        icon={<PowerOff className="w-3.5 h-3.5 text-amber-700" />}
+                        onClick={() => {
+                          setSuspendReason('');
+                          setSuspendPassword('');
+                          setShowSuspendModal(true);
+                        }}
+                      >
+                        {language === 'gu' ? 'સસ્પેન્ડ કરો' : 'Suspend Company'}
+                      </Button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Deletion Box */}
+                <div className="p-4 rounded-2xl bg-rose-50/70 border border-rose-200/80 flex flex-col justify-between gap-3 text-xs">
+                  <div>
+                    <h3 className="font-bold text-rose-900 text-sm">
+                      {language === 'gu' ? 'કંપની બંધ અને ડિલીટ કરો' : 'Close & Delete Company'}
+                    </h3>
+                    <p className="text-rose-800/80 mt-1 leading-relaxed">
+                      {language === 'gu'
+                        ? 'મજબૂત સુરક્ષા ચકાસણી: ફક્ત મુખ્ય એડમિન પાસવર્ડ અને કન્ફર્મેશન શબ્દ દાખલ કર્યા પછી જ બંધ કરી શકાશે. કારીગરો પાસે બાકી માલ હશે તો ડિલીટ નહીં થાય.'
+                        : 'Permanent closure requires strong confirmation and Primary Admin password. Blocked automatically if any pieces are pending in artisan custody.'}
+                    </p>
+                  </div>
+
+                  <div>
+                    <Button
+                      type="button"
+                      variant="danger"
+                      size="sm"
+                      icon={<Trash2 className="w-3.5 h-3.5" />}
+                      onClick={() => {
+                        setDeleteConfirmationPhrase('');
+                        setDeletePassword('');
+                        setShowDeleteModal(true);
+                      }}
+                    >
+                      {language === 'gu' ? 'કંપની બંધ કરો' : 'Delete Company'}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* SUSPENSION MODAL */}
+      {showSuspendModal && company && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-md w-full shadow-2xl border border-[#F0E1E1] space-y-4">
+            <div className="flex items-center gap-3 text-amber-600">
+              <div className="p-2.5 rounded-2xl bg-amber-100">
+                <PowerOff className="w-5 h-5 text-amber-700" />
+              </div>
+              <div>
+                <h3 className="font-serif text-lg font-bold text-[#30232A]">
+                  {company.status === 'Suspended' ? 'Reactivate Company' : 'Suspend Company'}
+                </h3>
+                <p className="text-xs text-slate-500">{company.name} ({company.code})</p>
+              </div>
+            </div>
+
+            {company.status !== 'Suspended' && (
+              <div>
+                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                  Reason for Suspension (Required)
+                </label>
+                <textarea
+                  rows={2}
+                  value={suspendReason}
+                  onChange={(e) => setSuspendReason(e.target.value)}
+                  placeholder="e.g. Annual workshop stocktaking and audit"
+                  className="w-full px-3 py-2 bg-slate-50 rounded-xl border border-slate-200 text-xs focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500/20"
+                />
+              </div>
+            )}
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Primary Admin Password
+              </label>
+              <Input
+                type="password"
+                value={suspendPassword}
+                onChange={(e) => setSuspendPassword(e.target.value)}
+                placeholder="Enter your administrator password"
+                leftIcon={<Lock className="w-4 h-4" />}
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowSuspendModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant={company.status === 'Suspended' ? 'primary' : 'danger'}
+                size="sm"
+                isLoading={isSuspending}
+                onClick={async () => {
+                  if (!suspendPassword.trim()) {
+                    showToast({ type: 'error', title: 'Required', message: 'Please enter your password.' });
+                    return;
+                  }
+                  setIsSuspending(true);
+                  try {
+                    if (company.status === 'Suspended') {
+                      await api.reactivateMyCompany({ password: suspendPassword });
+                      showToast({ type: 'success', title: 'Reactivated', message: 'Company operations have been resumed.' });
+                    } else {
+                      if (!suspendReason.trim()) {
+                        showToast({ type: 'error', title: 'Required', message: 'Please provide a reason for suspension.' });
+                        setIsSuspending(false);
+                        return;
+                      }
+                      await api.suspendMyCompany({ reason: suspendReason, password: suspendPassword });
+                      showToast({ type: 'success', title: 'Suspended', message: 'Company operations suspended. All data preserved.' });
+                    }
+                    const fresh = await api.getMyCompany();
+                    setCompany(fresh);
+                    setShowSuspendModal(false);
+                  } catch (err: any) {
+                    showToast({ type: 'error', title: 'Error', message: err.message || 'Operation failed.' });
+                  } finally {
+                    setIsSuspending(false);
+                  }
+                }}
+              >
+                {company.status === 'Suspended' ? 'Confirm Reactivation' : 'Confirm Suspension'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* STRONG DELETION MODAL */}
+      {showDeleteModal && company && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-fade-in">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-rose-200 space-y-4">
+            <div className="flex items-center gap-3 text-rose-600">
+              <div className="p-2.5 rounded-2xl bg-rose-100">
+                <AlertTriangle className="w-5 h-5 text-rose-700" />
+              </div>
+              <div>
+                <h3 className="font-serif text-lg font-bold text-rose-900">
+                  Strong Confirmation: Close Company
+                </h3>
+                <p className="text-xs text-rose-700 font-mono">{company.name} ({company.code})</p>
+              </div>
+            </div>
+
+            <div className="p-3.5 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-800 space-y-1.5">
+              <p className="font-bold">⚠️ Warning: Company closure will revoke all access immediately.</p>
+              <p>Deletion will be strictly rejected if any fabric pieces are still pending in artisan custody.</p>
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Type <span className="font-mono font-bold text-rose-700">DELETE {company.code}</span> to confirm:
+              </label>
+              <Input
+                type="text"
+                value={deleteConfirmationPhrase}
+                onChange={(e) => setDeleteConfirmationPhrase(e.target.value)}
+                placeholder={`DELETE ${company.code}`}
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">
+                Primary Admin Password
+              </label>
+              <Input
+                type="password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                placeholder="Enter your administrator password"
+                leftIcon={<Lock className="w-4 h-4" />}
+              />
+            </div>
+
+            <div className="flex justify-end gap-3 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowDeleteModal(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="danger"
+                size="sm"
+                isLoading={isDeleting}
+                onClick={async () => {
+                  if (deleteConfirmationPhrase.trim().toUpperCase() !== `DELETE ${company.code}`.toUpperCase() &&
+                      deleteConfirmationPhrase.trim().toUpperCase() !== `DELETE ${company.name}`.toUpperCase()) {
+                    showToast({
+                      type: 'error',
+                      title: 'Confirmation Mismatch',
+                      message: `Please type exactly "DELETE ${company.code}" to confirm.`,
+                    });
+                    return;
+                  }
+                  if (!deletePassword.trim()) {
+                    showToast({ type: 'error', title: 'Password Required', message: 'Please enter your administrator password.' });
+                    return;
+                  }
+                  setIsDeleting(true);
+                  try {
+                    await api.deleteMyCompany({
+                      confirmation_phrase: deleteConfirmationPhrase,
+                      password: deletePassword,
+                    });
+                    showToast({
+                      type: 'success',
+                      title: 'Company Deleted',
+                      message: 'The company has been closed and deleted. Redirecting...',
+                    });
+                    setShowDeleteModal(false);
+                    setTimeout(() => {
+                      logout();
+                    }, 1500);
+                  } catch (err: any) {
+                    showToast({
+                      type: 'error',
+                      title: 'Deletion Failed',
+                      message: err.message || 'Failed to delete company.',
+                    });
+                  } finally {
+                    setIsDeleting(false);
+                  }
+                }}
+              >
+                Authorise Deletion
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

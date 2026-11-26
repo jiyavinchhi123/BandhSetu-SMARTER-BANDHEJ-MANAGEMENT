@@ -114,6 +114,20 @@ def login(
     if not company:
         company = db.query(Company).filter(Company.id == (user.business_id or 1)).first()
 
+    # Company-level status enforcement: Block access if suspended or deleted while preserving all data
+    if company:
+        if company.is_deleted:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Company '{company.name}' ({company.code}) has been closed and deleted."
+            )
+        if company.status == "Suspended":
+            suspension_msg = company.suspension_reason or "Company account suspended by administrator."
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Company '{company.name}' ({company.code}) has been suspended: {suspension_msg}. All company data is safely preserved."
+            )
+
     # For managers, enforce approval status, operating hours, and lock status immediately on login attempt!
     if user.is_manager():
         if not user.is_active:
@@ -260,6 +274,14 @@ def register_company(
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"An account with email '{clean_email}' already exists. Please log in or use a different email."
+        )
+
+    # 2b. Check if admin phone already registered
+    existing_phone_user = db.query(User).filter(User.phone == clean_phone).first()
+    if existing_phone_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"An account with mobile number '{clean_phone}' is already registered. Please log in or use a different phone number."
         )
 
     # 3. Generate unique Company Code: COMP-XXXX

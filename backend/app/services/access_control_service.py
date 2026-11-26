@@ -23,11 +23,12 @@ class AccessControlService:
     def is_within_operating_hours(
         self,
         user: User,
-        current_dt: Optional[datetime] = None
+        current_dt: Optional[datetime] = None,
+        db: Optional[Session] = None,
     ) -> Tuple[bool, str]:
         """
         Validates whether a user is currently permitted to access the application
-        based on role, lock state, operating window, and extensions in IST.
+        based on role, lock state, company operational rules, operating window, and extensions in IST.
         Returns: (is_permitted, reason_or_status_message)
         """
         # Admins always have unrestricted 24/7 access
@@ -57,12 +58,35 @@ class AccessControlService:
             if now_ist <= ext_ist:
                 return True, f"Temporary access extended until {ext_ist.strftime('%I:%M %p IST')}"
 
+        # Check Company-Specific Operational Rules (Operating Days & Hours)
+        op_start = user.access_start_time or "08:00"
+        op_end = user.access_end_time or "20:00"
+        if db is not None and user.business_id:
+            try:
+                from app.models.company import Company
+                comp = db.query(Company).filter(Company.id == user.business_id).first()
+                if comp:
+                    # 1. Company operating days check (e.g. Mon,Tue,Wed,Thu,Fri,Sat)
+                    today_code = now_ist.strftime("%a")  # e.g. Mon, Sun
+                    allowed_days = [d.strip() for d in (comp.operating_days or "Mon,Tue,Wed,Thu,Fri,Sat").split(",")]
+                    if today_code not in allowed_days and not comp.allow_manager_weekend_access:
+                        return (
+                            False,
+                            f"Company workshop is closed on {now_ist.strftime('%A')} per company operational rules."
+                        )
+                    # 2. Company operating window override if defined
+                    if comp.operating_hours_start and comp.operating_hours_end:
+                        op_start = comp.operating_hours_start
+                        op_end = comp.operating_hours_end
+            except Exception:
+                pass
+
         # Parse start and end times (HH:MM)
         try:
-            start_h, start_m = map(int, user.access_start_time.split(":"))
-            end_h, end_m = map(int, user.access_end_time.split(":"))
+            start_h, start_m = map(int, op_start.split(":"))
+            end_h, end_m = map(int, op_end.split(":"))
         except Exception:
-            start_h, start_m = 9, 0
+            start_h, start_m = 8, 0
             end_h, end_m = 20, 0
 
         curr_minutes = now_ist.hour * 60 + now_ist.minute
@@ -77,7 +101,7 @@ class AccessControlService:
             in_window = curr_minutes >= start_minutes or curr_minutes <= end_minutes
 
         if in_window:
-            return True, f"Within permitted operating hours ({user.access_start_time} - {user.access_end_time} IST)"
+            return True, f"Within permitted operating hours ({op_start} - {op_end} IST)"
 
         # Outside permitted hours
         start_12 = time(start_h, start_m).strftime("%I:%M %p")
@@ -90,10 +114,11 @@ class AccessControlService:
     def verify_manager_access_or_raise(
         self,
         user: User,
-        current_dt: Optional[datetime] = None
+        current_dt: Optional[datetime] = None,
+        db: Optional[Session] = None,
     ) -> None:
         """Raises HTTPException 403 if user is blocked or outside access window."""
-        permitted, reason = self.is_within_operating_hours(user, current_dt)
+        permitted, reason = self.is_within_operating_hours(user, current_dt, db=db)
         if not permitted:
             if user.is_locked:
                 code = "ACCOUNT_LOCKED"

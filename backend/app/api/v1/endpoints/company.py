@@ -10,11 +10,14 @@ from app.models.user import User
 from app.schemas.auth import (
     CompanyResponse,
     CompanyUpdateRequest,
+    CompanySuspendRequest,
+    CompanyReactivateRequest,
+    CompanyDeleteRequest,
     UserResponse,
     AdminCreateRequest,
 )
 from app.api.deps import get_current_user, require_admin
-from app.core.security import hash_password
+from app.core.security import hash_password, verify_password
 from app.services.access_control_service import access_control_service
 
 router = APIRouter()
@@ -62,6 +65,16 @@ def update_my_company(
         comp.phone = data.phone.strip()
     if data.email is not None:
         comp.email = data.email.strip().lower()
+    if data.gst_number is not None:
+        comp.gst_number = data.gst_number.strip().upper()
+    if data.operating_hours_start is not None:
+        comp.operating_hours_start = data.operating_hours_start.strip()
+    if data.operating_hours_end is not None:
+        comp.operating_hours_end = data.operating_hours_end.strip()
+    if data.operating_days is not None:
+        comp.operating_days = data.operating_days.strip()
+    if data.allow_manager_weekend_access is not None:
+        comp.allow_manager_weekend_access = bool(data.allow_manager_weekend_access)
 
     comp.updated_at = datetime.utcnow()
     db.commit()
@@ -79,6 +92,205 @@ def update_my_company(
     )
 
     return comp
+
+
+@router.post("/my-company/suspend", summary="Suspend company operations without deleting data (Primary Admin Only)")
+def suspend_my_company(
+    req: CompanySuspendRequest,
+    request: Request,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Suspends all company operations while preserving 100% of historical data.
+    Immediately blocks all users/managers from accessing the platform.
+    Requires Primary Admin authorization and password verification.
+    """
+    if not admin_user.is_primary_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the Primary Admin / Business Owner can suspend the company."
+        )
+
+    # Password re-authentication
+    if not verify_password(req.password, admin_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect administrator password."
+        )
+
+    comp = db.query(Company).filter(Company.id == (admin_user.business_id or 1)).first()
+    if not comp:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found.")
+
+    comp.status = "Suspended"
+    comp.suspension_reason = req.reason.strip()
+    comp.suspended_at = datetime.utcnow()
+    comp.suspended_by_id = admin_user.id
+    comp.updated_at = datetime.utcnow()
+
+    # Invalidate all active sessions for this company
+    db.query(User).filter(User.business_id == comp.id).update(
+        {User.token_version: User.token_version + 1}
+    )
+    db.commit()
+    db.refresh(comp)
+
+    client_ip = request.client.host if request.client else "unknown"
+    access_control_service.log_audit(
+        db=db,
+        action="COMPANY_SUSPENDED",
+        user_id=admin_user.id,
+        user_email=admin_user.email,
+        user_role="admin",
+        ip_address=client_ip,
+        details=f"Company '{comp.name}' ({comp.code}) suspended by Primary Admin {admin_user.email}. Reason: {req.reason}"
+    )
+
+    return {
+        "message": f"Company '{comp.name}' has been suspended. All business data is safely preserved.",
+        "status": comp.status,
+        "suspended_at": comp.suspended_at.isoformat() if comp.suspended_at else None,
+        "reason": comp.suspension_reason,
+    }
+
+
+@router.post("/my-company/reactivate", summary="Reactivate suspended company (Primary Admin Only)")
+def reactivate_my_company(
+    req: CompanyReactivateRequest,
+    request: Request,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Reactivates a suspended company account.
+    Requires Primary Admin password verification.
+    """
+    if not admin_user.is_primary_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only the Primary Admin / Business Owner can reactivate the company."
+        )
+
+    if not verify_password(req.password, admin_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect administrator password."
+        )
+
+    comp = db.query(Company).filter(Company.id == (admin_user.business_id or 1)).first()
+    if not comp:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found.")
+
+    comp.status = "Active"
+    comp.suspension_reason = None
+    comp.suspended_at = None
+    comp.suspended_by_id = None
+    comp.updated_at = datetime.utcnow()
+    db.commit()
+    db.refresh(comp)
+
+    client_ip = request.client.host if request.client else "unknown"
+    access_control_service.log_audit(
+        db=db,
+        action="COMPANY_REACTIVATED",
+        user_id=admin_user.id,
+        user_email=admin_user.email,
+        user_role="admin",
+        ip_address=client_ip,
+        details=f"Company '{comp.name}' ({comp.code}) reactivated by Primary Admin {admin_user.email}."
+    )
+
+    return {
+        "message": f"Company '{comp.name}' is now active.",
+        "status": comp.status,
+    }
+
+
+@router.post("/my-company/delete", summary="Company deletion with strong authorization and safety confirmation (Primary Admin Only)")
+def delete_my_company(
+    req: CompanyDeleteRequest,
+    request: Request,
+    admin_user: User = Depends(require_admin),
+    db: Session = Depends(get_db)
+):
+    """
+    Deletes/Closes a company with strong safety verification:
+    - Primary Admin authorization required.
+    - Password re-verification required.
+    - Exact confirmation phrase 'DELETE <code_or_name>' required.
+    - Pre-condition check: Rejects if active consignments are pending with artisans.
+    """
+    if not admin_user.is_primary_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Strong Authorization Failed: Only the Primary Admin can authorize company deletion."
+        )
+
+    if not verify_password(req.password, admin_user.hashed_password):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Incorrect administrator password."
+        )
+
+    comp = db.query(Company).filter(Company.id == (admin_user.business_id or 1)).first()
+    if not comp:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Company not found.")
+
+    # Strong confirmation phrase verification
+    expected_phrases = [
+        f"DELETE {comp.code}".lower().strip(),
+        f"DELETE {comp.name}".lower().strip(),
+    ]
+    if req.confirmation_phrase.lower().strip() not in expected_phrases:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Confirmation phrase mismatch. Please type exactly 'DELETE {comp.code}' or 'DELETE {comp.name}'."
+        )
+
+    # Pre-condition safety check: Prevent deletion if active pieces in custody exist
+    from app.models.work_distribution import WorkDistribution
+    active_consignments = db.query(WorkDistribution).filter(
+        WorkDistribution.business_id == comp.id,
+        WorkDistribution.quantity_pending > 0
+    ).count()
+
+    if active_consignments > 0:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=(
+                f"Cannot delete company: {active_consignments} consignment batches still have pieces pending in artisan custody. "
+                "Please receive all pending pieces or suspend the company instead."
+            )
+        )
+
+    # Soft-delete company and terminate all user access immediately
+    comp.is_deleted = True
+    comp.status = "Deleted"
+    comp.deleted_at = datetime.utcnow()
+    comp.deleted_by_id = admin_user.id
+    comp.updated_at = datetime.utcnow()
+
+    db.query(User).filter(User.business_id == comp.id).update(
+        {User.token_version: User.token_version + 10, User.is_active: False}
+    )
+    db.commit()
+
+    client_ip = request.client.host if request.client else "unknown"
+    access_control_service.log_audit(
+        db=db,
+        action="COMPANY_DELETED",
+        user_id=admin_user.id,
+        user_email=admin_user.email,
+        user_role="admin",
+        ip_address=client_ip,
+        details=f"Company '{comp.name}' ({comp.code}) deleted by Primary Admin {admin_user.email}."
+    )
+
+    return {
+        "message": f"Company '{comp.name}' ({comp.code}) has been closed and deleted.",
+        "status": "Deleted",
+    }
 
 
 @router.get("/admins", response_model=List[UserResponse], summary="List all Admins for this company (Admin Only)")

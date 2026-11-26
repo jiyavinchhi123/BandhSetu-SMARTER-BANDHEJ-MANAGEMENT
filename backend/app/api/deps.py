@@ -62,8 +62,25 @@ def get_current_user(
             detail="Session has been revoked by an administrative action. Please log in again.",
         )
 
+    # Enforce Company-Level Suspension and Deletion
+    if user.business_id:
+        from app.models.company import Company
+        company = db.query(Company).filter(Company.id == user.business_id).first()
+        if company:
+            if company.is_deleted:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="This company account has been closed and deleted.",
+                )
+            if company.status == "Suspended":
+                suspension_msg = company.suspension_reason or "Company account suspended by administrator."
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail=f"Company '{company.name}' ({company.code}) has been suspended: {suspension_msg}. All company records are preserved safely.",
+                )
+
     # Enforce access hours and lock conditions for managers on every protected endpoint
-    access_control_service.verify_manager_access_or_raise(user)
+    access_control_service.verify_manager_access_or_raise(user, db=db)
 
     return user
 

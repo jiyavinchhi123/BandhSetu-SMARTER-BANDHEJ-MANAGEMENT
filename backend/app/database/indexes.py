@@ -122,6 +122,28 @@ def ensure_multi_tenant_schema(engine: Engine) -> int:
         except Exception:
             pass
 
+        # Add Company Protection & Operational Rules Columns
+        company_columns = [
+            ("gst_number", "VARCHAR(50)"),
+            ("suspension_reason", "TEXT"),
+            ("suspended_at", "TIMESTAMP"),
+            ("suspended_by_id", "INTEGER"),
+            ("operating_hours_start", "VARCHAR(10) DEFAULT '08:00'"),
+            ("operating_hours_end", "VARCHAR(10) DEFAULT '20:00'"),
+            ("operating_days", "VARCHAR(100) DEFAULT 'Mon,Tue,Wed,Thu,Fri,Sat'"),
+            ("allow_manager_weekend_access", "BOOLEAN DEFAULT 0"),
+            ("timezone", "VARCHAR(50) DEFAULT 'Asia/Kolkata'"),
+            ("is_deleted", "BOOLEAN DEFAULT 0"),
+            ("deleted_at", "TIMESTAMP"),
+            ("deleted_by_id", "INTEGER"),
+        ]
+        for col_name, col_type in company_columns:
+            try:
+                conn.execute(text(f"ALTER TABLE companies ADD COLUMN {col_name} {col_type};"))
+                conn.commit()
+            except Exception:
+                pass
+
         # Seed Default Company 1 ('Vinchhi Bandhej') if not existing
         try:
             comp_exists = conn.execute(text("SELECT COUNT(*) FROM companies WHERE id = 1;")).scalar()
